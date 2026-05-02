@@ -1,8 +1,8 @@
+const pLimit = require('p-limit');
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
 const NodeCache = require('node-cache');
-const pLimit = require('p-limit');
 const path = require('path');
 
 const app = express();
@@ -18,7 +18,7 @@ const API_FOOTBALL_URL = 'https://v3.football.api-sports.io';
 const ODDS_API_URL = 'https://api.the-odds-api.com/v4';
 
 const LIGA_CONFIG = {
-  39:  { name: 'Premier League',    faktor: 1.00, bazaGG: 52, sport_key: 'soccer_england_premier_league' },
+  39:  { name: 'Premier League',    faktor: 1.00, bazaGG: 52, sport_key: 'soccer_epl' },
   78:  { name: 'Bundesliga',        faktor: 1.05, bazaGG: 56, sport_key: 'soccer_germany_bundesliga' },
   140: { name: 'La Liga',           faktor: 0.95, bazaGG: 50, sport_key: 'soccer_spain_la_liga' },
   135: { name: 'Serie A',           faktor: 0.90, bazaGG: 48, sport_key: 'soccer_italy_serie_a' },
@@ -50,10 +50,7 @@ const TEAM_NAME_MAP = {
   "Leverkusen": "Bayer Leverkusen", "Atletico": "Atletico Madrid", "AC Milan": "Milan",
   "Inter": "Inter Milan", "Napoli": "Napoli", "Roma": "Roma", "PSG": "Paris Saint Germain"
 };
-function normalizeTeamName(name) {
-  const n = name.trim();
-  return TEAM_NAME_MAP[n] || n;
-}
+function normalizeTeamName(name) { const n = name.trim(); return TEAM_NAME_MAP[n] || n; }
 
 async function getTeamId(name) {
   const normalized = normalizeTeamName(name);
@@ -198,17 +195,7 @@ app.get('/api/top-leagues', (req, res) => {
   const sorted = leagues.sort((a, b) => b.gg_percent - a.gg_percent);
   res.json(sorted);
 });
-app.get('/api/available-leagues', async (req, res) => {
-  try {
-    const sportsRes = await axios.get(
-      `${ODDS_API_URL}/sports?apiKey=${ODDS_API_KEY}&all=false`
-    );
-    const soccer = sportsRes.data.filter(s => s.group === 'Soccer');
-    res.json(soccer);
-  } catch(err) {
-    res.status(500).json({ error: err.message });
-  }
-});
+
 app.get('/api/upcoming', async (req, res) => {
   const { leagueId } = req.query;
   if (!leagueId || !LIGA_CONFIG[leagueId]) return res.status(400).json({ error: 'Nepoznata liga' });
