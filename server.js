@@ -1,6 +1,8 @@
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
+const NodeCache = require('node-cache');
+const pLimit = require('p-limit');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -8,14 +10,14 @@ const PORT = process.env.PORT || 3000;
 app.use(cors({ origin: '*' }));
 app.use(express.json());
 
-// ==================== API KLJUČEVI (postavi u environment na Renderu) ====================
+// ========== API KLJUČEVI ==========
 const API_FOOTBALL_KEY = process.env.API_FOOTBALL_KEY || '06cba23f71945f8e5ae6e6242d76972a';
-const ODDS_API_KEY = process.env.ODDS_API_KEY; // OBAVEZNO!
+const ODDS_API_KEY = process.env.ODDS_API_KEY;
 
 const API_FOOTBALL_URL = 'https://v3.football.api-sports.io';
 const ODDS_API_URL = 'https://api.the-odds-api.com/v4';
 
-// ==================== LIGA MAPIRANJE ====================
+// ========== LIGA KONFIGURACIJA ==========
 const LIGA_CONFIG = {
   39:  { name: 'Premier League',    faktor: 1.00, bazaGG: 52, sport_key: 'soccer_england_premier_league' },
   78:  { name: 'Bundesliga',        faktor: 1.05, bazaGG: 56, sport_key: 'soccer_germany_bundesliga' },
@@ -23,28 +25,14 @@ const LIGA_CONFIG = {
   135: { name: 'Serie A',           faktor: 0.90, bazaGG: 48, sport_key: 'soccer_italy_serie_a' },
   61:  { name: 'Ligue 1',           faktor: 0.95, bazaGG: 50, sport_key: 'soccer_france_ligue_one' },
   88:  { name: 'Eredivisie',        faktor: 1.05, bazaGG: 57, sport_key: 'soccer_netherlands_eredivisie' },
-  2:   { name: 'Champions League',  faktor: 1.02, bazaGG: 54, sport_key: 'soccer_uefa_champions_league' },
-  3:   { name: 'Europa League',     faktor: 1.00, bazaGG: 52, sport_key: 'soccer_uefa_europa_league' },
 };
 
-// ==================== KEŠIRANJE ====================
-const cache = new Map();
-const CACHE_TTL = {
-  stats: 24 * 60 * 60 * 1000, // 24h
-  odds:  60 * 60 * 1000,      // 1h
-};
+// ========== KEŠIRANJE ==========
+const cache = new NodeCache({ stdTTL: 86400, maxKeys: 500, checkperiod: 3600 });
+function getCache(key) { return cache.get(key); }
+function setCache(key, data) { cache.set(key, data); }
 
-function getCache(key, ttlKey = 'stats') {
-  const entry = cache.get(key);
-  if (!entry) return null;
-  if (Date.now() - entry.ts > CACHE_TTL[ttlKey]) { cache.delete(key); return null; }
-  return entry.data;
-}
-function setCache(key, data, ttlKey = 'stats') {
-  cache.set(key, { data, ts: Date.now() });
-}
-
-// ==================== HELPER ZA API-FOOTBALL ====================
+// ========== HELPER ZA API-FOOTBALL ==========
 async function apiFootball(endpoint, params) {
   try {
     const res = await axios.get(`${API_FOOTBALL_URL}${endpoint}`, {
@@ -57,38 +45,62 @@ async function apiFootball(endpoint, params) {
   }
 }
 
-// ==================== DOHVATI ID TIMA ====================
+// ========== FUZZY MATCHING IMENA TIMOVA ==========
+const TEAM_NAME_MAP = {
+  "Man Utd": "Manchester United", "Man United": "Manchester United", "Tottenham": "Tottenham Hotspur",
+  "Spurs": "Tottenham Hotspur", "Newcastle": "Newcastle United", "Leeds": "Leeds United",
+  "Wolves": "Wolverhampton Wanderers", "West Ham": "West Ham United", "Brighton": "Brighton & Hove Albion",
+  "Leicester": "Leicester City", "FC Bayern": "Bayern Munich", "Bayern München": "Bayern Munich",
+  "Leverkusen": "Bayer Leverkusen", "Atletico": "Atletico Madrid", "AC Milan": "Milan",
+  "Inter": "Inter Milan", "Napoli": "Napoli", "Roma": "Roma", "PSG": "Paris Saint Germain"
+};
+function normalizeTeamName(name) {
+  const n = name.trim();
+  return TEAM_NAME_MAP[n] || n;
+}
+
 async function getTeamId(name) {
-  const cacheKey = `team_${name.toLowerCase()}`;
+  const normalized = normalizeTeamName(name);
+  const cacheKey = `team_${normalized.toLowerCase()}`;
   const cached = getCache(cacheKey);
   if (cached) return cached;
-  const results = await apiFootball('/teams', { search: name });
-  if (!results.length) throw new Error(`Tim nije pronađen: ${name}`);
+  const results = await apiFootball('/teams', { search: normalized });
+  if (!results.length) throw new Error(`Tim nije pronađen: ${normalized}`);
   const id = results[0].team.id;
   setCache(cacheKey, id);
   return id;
 }
 
-// ==================== STATISTIKE TIMA (2023-2024) ====================
+// ========== STATISTIKE SA FALLBACK ==========
 async function getTeamStatsSeason(teamId, leagueId, season) {
   const cacheKey = `stats_${teamId}_${leagueId}_${season}`;
-  const cached = getCache(cacheKey);
-  if (cached) return cached;
+  let data = getCache(cacheKey);
+  if (data) return data;
   const results = await apiFootball('/teams/statistics', { team: teamId, league: leagueId, season });
-  if (!results || !results.fixtures) return null;
+  if (!results || !results.fixtures) {
+    const liga = LIGA_CONFIG[leagueId] || LIGA_CONFIG[39];
+    const fallback = { played: 10, avgFor: 1.2, avgAgainst: 1.2, avgTotal: 2.4, btts: liga.bazaGG };
+    setCache(cacheKey, fallback);
+    return fallback;
+  }
   const played = results.fixtures.played?.total || 0;
-  if (played === 0) return null;
+  if (played === 0) {
+    const liga = LIGA_CONFIG[leagueId] || LIGA_CONFIG[39];
+    const fallback = { played: 10, avgFor: 1.2, avgAgainst: 1.2, avgTotal: 2.4, btts: liga.bazaGG };
+    setCache(cacheKey, fallback);
+    return fallback;
+  }
   const goalsFor = results.goals?.for?.total?.total || 0;
   const goalsAgainst = results.goals?.against?.total?.total || 0;
   const cleanSheets = results.clean_sheet?.total || 0;
   const failedToScore = results.failed_to_score?.total || 0;
   const btts = Math.round(((played - cleanSheets) / played * 0.5 + (played - failedToScore) / played * 0.5) * 100);
-  const data = {
+  const stats = {
     played, avgFor: +(goalsFor / played).toFixed(2), avgAgainst: +(goalsAgainst / played).toFixed(2),
     avgTotal: +((goalsFor + goalsAgainst) / played).toFixed(2), btts: Math.min(95, Math.max(5, btts))
   };
-  setCache(cacheKey, data);
-  return data;
+  setCache(cacheKey, stats);
+  return stats;
 }
 
 async function getTeamBTTS(teamId, leagueId) {
@@ -125,17 +137,14 @@ async function getH2H(homeId, awayId) {
   const finished = matches.filter(m => m.fixture?.status?.short === 'FT');
   if (!finished.length) return { matches: 0, ggPct: 50, avgGoals: 2.5, gg3Pct: 30 };
   const ggCount = finished.filter(m => (m.goals?.home ?? 0) > 0 && (m.goals?.away ?? 0) > 0).length;
-  const gg3Count = finished.filter(m => {
-    const total = (m.goals?.home ?? 0) + (m.goals?.away ?? 0);
-    return (m.goals?.home ?? 0) > 0 && (m.goals?.away ?? 0) > 0 && total >= 3;
-  }).length;
+  const gg3Count = finished.filter(m => (m.goals?.home ?? 0) + (m.goals?.away ?? 0) >= 3 && (m.goals?.home ?? 0) > 0 && (m.goals?.away ?? 0) > 0).length;
   const totalGoals = finished.reduce((s, m) => s + (m.goals?.home ?? 0) + (m.goals?.away ?? 0), 0);
   const result = { matches: finished.length, ggPct: Math.round((ggCount / finished.length) * 100), gg3Pct: Math.round((gg3Count / finished.length) * 100), avgGoals: +(totalGoals / finished.length).toFixed(2) };
   setCache(cacheKey, result);
   return result;
 }
 
-// ==================== ANALIZA JEDNOG MEČA ====================
+// ========== GLAVNA ANALIZA SA POBOLJŠANJIMA ==========
 async function analyzeMatch(home, away, leagueId) {
   const liga = LIGA_CONFIG[leagueId] || LIGA_CONFIG[39];
   const [homeId, awayId] = await Promise.all([getTeamId(home), getTeamId(away)]);
@@ -144,17 +153,84 @@ async function analyzeMatch(home, away, leagueId) {
     getTeamForm(homeId, leagueId, 2024), getTeamForm(awayId, leagueId, 2024),
     getH2H(homeId, awayId)
   ]);
+
   const teamAvgBTTS = Math.round((homeStats.btts + awayStats.btts) / 2);
   const formAvg = Math.round((homeForm + awayForm) / 2);
   const h2hGG = h2h.matches > 0 ? h2h.ggPct : teamAvgBTTS;
   let ggRaw = (h2hGG * 0.40) + (teamAvgBTTS * 0.30) + (formAvg * 0.20) + (liga.bazaGG * 0.10);
   let ggPct = Math.min(90, Math.max(15, Math.round(ggRaw * liga.faktor)));
-  const avgTotalGoals = +((homeStats.avgFor + awayStats.avgFor + h2h.avgGoals) / 3).toFixed(2);
-  let gg3Pct = Math.min(ggPct, Math.max(10, Math.round(ggPct * Math.min(avgTotalGoals / 3.0, 1.0))));
-  return { ggPct, gg3Pct, avgTotalGoals, h2hMatches: h2h.matches, h2hGGpct: h2h.ggPct };
+
+  let avgTotalGoals = +((homeStats.avgFor + awayStats.avgFor + h2h.avgGoals) / 3).toFixed(2);
+  const defenseFactor = Math.min(1.2, Math.max(0.8, (homeStats.avgAgainst + awayStats.avgAgainst) / 2 / 1.5));
+  const adjustedAvgTotal = avgTotalGoals * defenseFactor;
+  let gg3Pct = Math.min(ggPct, Math.max(10, Math.round(ggPct * Math.min(adjustedAvgTotal / 3.0, 1.2))));
+
+  let confidence = 30;
+  if (h2h.matches >= 6) confidence = 90;
+  else if (h2h.matches >= 3) confidence = 70;
+  else if (h2h.matches > 0) confidence = 45;
+  else confidence = 25;
+  if (homeForm < 35 || awayForm < 35) confidence -= 10;
+  confidence = Math.min(100, Math.max(0, confidence));
+
+  let reasoning = `H2H (${h2h.matches} meča): GG ${h2h.ggPct}%. `;
+  reasoning += `Forma: ${home} ${homeForm}% GG, ${away} ${awayForm}% GG. `;
+  reasoning += `Odbrane: ${home} prima ${homeStats.avgAgainst}, ${away} prima ${awayStats.avgAgainst}. `;
+  if (confidence < 50) reasoning += `⚠️ Niska pouzdanost (malo H2H podataka). `;
+  if (gg3Pct > ggPct * 0.75) reasoning += `📈 Pogodno za GG3+ zbog slabih odbrana.`;
+
+  return {
+    ggPct, gg3Pct, avgTotalGoals,
+    h2hMatches: h2h.matches,
+    h2hGGpct: h2h.ggPct,
+    confidence_score: confidence,
+    reasoning_text: reasoning,
+    home_avg_for: homeStats.avgFor,
+    home_avg_against: homeStats.avgAgainst,
+    home_form: homeForm,
+    away_avg_for: awayStats.avgFor,
+    away_avg_against: awayStats.avgAgainst,
+    away_form: awayForm
+  };
 }
 
-// ==================== ENDPOINT: DOHVAĆANJE MEČEVA ZA 7 DANA (The Odds API) ====================
+// ========== ENDPOINT ZA TOP LIGE ==========
+app.get('/api/top-leagues', async (req, res) => {
+  const cacheKey = 'top_leagues_gg_rank';
+  let cached = getCache(cacheKey);
+  if (cached) return res.json(cached);
+
+  const allLeagues = await apiFootball('/leagues');
+  if (!allLeagues.length) return res.json([]);
+
+  const season = 2024;
+  const leaguesWithStats = [];
+  for (const league of allLeagues) {
+    const leagueId = league.league.id;
+    const leagueName = league.league.name;
+    const leagueCountry = league.country.name;
+    const isCurrent = league.seasons?.some(s => s.year === season && s.current);
+    if (league.league.type !== 'League' || !isCurrent) continue;
+    const fixtures = await apiFootball('/fixtures', { league: leagueId, season, status: 'FT' });
+    if (fixtures.length < 100) continue;
+    let totalBtts = 0;
+    fixtures.forEach(f => {
+      if ((f.goals?.home ?? 0) > 0 && (f.goals?.away ?? 0) > 0) totalBtts++;
+    });
+    const ggPercent = (totalBtts / fixtures.length) * 100;
+    leaguesWithStats.push({
+      id: leagueId,
+      name: `${leagueCountry} - ${leagueName}`,
+      gg_percent: Math.round(ggPercent),
+      matches_analyzed: fixtures.length
+    });
+  }
+  const sorted = leaguesWithStats.sort((a,b) => b.gg_percent - a.gg_percent).slice(0, 10);
+  setCache(cacheKey, sorted);
+  res.json(sorted);
+});
+
+// ========== ENDPOINT ZA UPCOMING MEČEVE (ODDS API) ==========
 app.get('/api/upcoming', async (req, res) => {
   const { leagueId } = req.query;
   if (!leagueId || !LIGA_CONFIG[leagueId]) return res.status(400).json({ error: 'Nepoznata liga' });
@@ -162,85 +238,98 @@ app.get('/api/upcoming', async (req, res) => {
   if (!ODDS_API_KEY) return res.status(500).json({ error: 'ODDS_API_KEY nije postavljen' });
 
   const cacheKey = `upcoming_${leagueId}`;
-  const cached = getCache(cacheKey, 'odds');
+  let cached = getCache(cacheKey);
   if (cached) return res.json(cached);
 
   try {
-    // 1. Dohvati upcoming eventove za sport_key
     const eventsUrl = `${ODDS_API_URL}/sports/${liga.sport_key}/events?apiKey=${ODDS_API_KEY}`;
     const eventsRes = await axios.get(eventsUrl);
     const events = eventsRes.data || [];
     if (!events.length) return res.json([]);
 
-    // 2. Za svaki event dohvati kvote (markets: h2h, btts, totals)
     const oddsPromises = events.map(async (event) => {
-      const oddsUrl = `${ODDS_API_URL}/sports/${liga.sport_key}/events/${event.id}/odds?apiKey=${ODDS_API_KEY}&regions=eu&markets=h2h,btts,totals&bookmakers=bet365`;
       try {
+        const oddsUrl = `${ODDS_API_URL}/sports/${liga.sport_key}/events/${event.id}/odds?apiKey=${ODDS_API_KEY}&regions=eu&markets=btts&bookmakers=bet365`;
         const oddsRes = await axios.get(oddsUrl);
-        const oddsData = oddsRes.data;
-        const bookmaker = oddsData.bookmakers?.[0];
-        const h2h = bookmaker?.markets?.find(m => m.key === 'h2h')?.outcomes;
+        const bookmaker = oddsRes.data.bookmakers?.[0];
         const btts = bookmaker?.markets?.find(m => m.key === 'btts')?.outcomes;
-        const totals = bookmaker?.markets?.find(m => m.key === 'totals')?.outcomes;
-        const homeOdds = h2h?.find(o => o.name === event.home_team)?.price;
-        const awayOdds = h2h?.find(o => o.name === event.away_team)?.price;
-        const drawOdds = h2h?.find(o => o.name === 'Draw')?.price;
-        const bttsYes = btts?.find(o => o.name === 'Yes')?.price;
-        const over25 = totals?.find(o => o.point === 2.5 && o.name === 'Over')?.price;
         return {
-          id: event.id,
-          home: event.home_team,
-          away: event.away_team,
+          id: event.id, home: event.home_team, away: event.away_team,
           commence_time: event.commence_time,
-          odds: { home: homeOdds, away: awayOdds, draw: drawOdds, btts_yes: bttsYes, over_25: over25 }
+          odds: { btts_yes: btts?.find(o => o.name === 'Yes')?.price }
         };
       } catch (e) { return null; }
     });
-    const matchesWithOdds = (await Promise.all(oddsPromises)).filter(m => m !== null);
-    setCache(cacheKey, matchesWithOdds, 'odds');
-    res.json(matchesWithOdds);
+    const matches = (await Promise.all(oddsPromises)).filter(m => m !== null);
+    setCache(cacheKey, matches);
+    res.json(matches);
   } catch (err) {
     console.error('Upcoming error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
 
-// ==================== ENDPOINT: ANALIZA ZA SVE MEČEVE IZ LISTE ====================
+// ========== BATCH ANALIZA SA VALUE BET ==========
+const limit = pLimit(3);
 app.post('/api/analyze-batch', async (req, res) => {
   const { matches, leagueId } = req.body;
-  if (!matches || !Array.isArray(matches)) return res.status(400).json({ error: 'Nedostaje lista mečeva' });
-  const results = [];
-  for (const m of matches) {
-    try {
-      const { ggPct, gg3Pct, avgTotalGoals, h2hMatches, h2hGGpct } = await analyzeMatch(m.home, m.away, leagueId);
-      const implGG = m.odds?.btts_yes ? (1 / m.odds.btts_yes) * 100 : null;
-      const valueGG = implGG ? ggPct - implGG : null;
-      results.push({
-        home: m.home, away: m.away, commence_time: m.commence_time,
-        gg_percent: ggPct, gg3_percent: gg3Pct, avg_total: avgTotalGoals,
-        odds: m.odds, implied_gg_pct: implGG, value_gg: valueGG,
-        h2h_matches: h2hMatches, h2h_gg_pct: h2hGGpct,
-        value_bet: (valueGG !== null && valueGG > 5)
-      });
-    } catch (err) {
-      results.push({ home: m.home, away: m.away, error: err.message });
-    }
-    await new Promise(r => setTimeout(r, 300)); // throttle
+  if (!matches || !Array.isArray(matches)) {
+    return res.status(400).json({ error: 'Nedostaje lista mečeva' });
   }
+
+  const tasks = matches.map(match => limit(async () => {
+    const cacheKey = `analysis_${match.home}_${match.away}_${leagueId}`;
+    const cached = getCache(cacheKey);
+    if (cached) {
+      cached.odds = match.odds;
+      cached.implied_gg_pct = match.odds?.btts_yes ? (1 / match.odds.btts_yes) * 100 : null;
+      const edge = (cached.gg_percent / 100) * (match.odds?.btts_yes || 1) - 1;
+      cached.edge_percent = (edge * 100).toFixed(1);
+      cached.value_bet = edge > 0.08 ? 'high_value' : (edge > 0.03 ? 'medium_value' : 'low_value');
+      return cached;
+    }
+
+    try {
+      const analysis = await analyzeMatch(match.home, match.away, leagueId);
+      const bttsOdds = match.odds?.btts_yes;
+      const impliedPct = bttsOdds ? (1 / bttsOdds) * 100 : null;
+      const edge = (analysis.ggPct / 100) * (bttsOdds || 1) - 1;
+
+      const result = {
+        home: match.home,
+        away: match.away,
+        commence_time: match.commence_time,
+        gg_percent: analysis.ggPct,
+        gg3_percent: analysis.gg3Pct,
+        avg_total: analysis.avgTotalGoals,
+        h2h_matches: analysis.h2hMatches,
+        h2h_gg_pct: analysis.h2hGGpct,
+        confidence_score: analysis.confidence_score,
+        reasoning_text: analysis.reasoning_text,
+        odds: match.odds,
+        implied_gg_pct: impliedPct,
+        edge_percent: (edge * 100).toFixed(1),
+        value_bet: edge > 0.08 ? 'high_value' : (edge > 0.03 ? 'medium_value' : 'low_value'),
+        home_avg_for: analysis.home_avg_for,
+        home_avg_against: analysis.home_avg_against,
+        home_form: analysis.home_form,
+        away_avg_for: analysis.away_avg_for,
+        away_avg_against: analysis.away_avg_against,
+        away_form: analysis.away_form
+      };
+      setCache(cacheKey, result);
+      return result;
+    } catch (err) {
+      console.error(`Greška za ${match.home} vs ${match.away}:`, err.message);
+      return { home: match.home, away: match.away, error: err.message };
+    }
+  }));
+
+  const results = await Promise.all(tasks);
   res.json(results);
 });
 
-// ==================== STARI ENDPOINT ZA RUČNU ANALIZU (opcija) ====================
-app.post('/api/analyze', async (req, res) => {
-  const { home, away, leagueId } = req.body;
-  try {
-    const { ggPct, gg3Pct, avgTotalGoals, h2hMatches, h2hGGpct } = await analyzeMatch(home, away, leagueId);
-    res.json({ gg_percent: ggPct, gg3_percent: gg3Pct, avg_total: avgTotalGoals, h2h_matches: h2hMatches, h2h_gg_pct: h2hGGpct });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.get('/api/health', (req, res) => res.json({ status: 'ok', cacheSize: cache.size }));
+// ========== HEALTH ==========
+app.get('/api/health', (req, res) => res.json({ status: 'ok', cacheSize: cache.keys().length }));
 
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
