@@ -198,7 +198,17 @@ app.get('/api/top-leagues', (req, res) => {
   const sorted = leagues.sort((a, b) => b.gg_percent - a.gg_percent);
   res.json(sorted);
 });
-
+app.get('/api/available-leagues', async (req, res) => {
+  try {
+    const sportsRes = await axios.get(
+      `${ODDS_API_URL}/sports?apiKey=${ODDS_API_KEY}&all=false`
+    );
+    const soccer = sportsRes.data.filter(s => s.group === 'Soccer');
+    res.json(soccer);
+  } catch(err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 app.get('/api/upcoming', async (req, res) => {
   const { leagueId } = req.query;
   if (!leagueId || !LIGA_CONFIG[leagueId]) return res.status(400).json({ error: 'Nepoznata liga' });
