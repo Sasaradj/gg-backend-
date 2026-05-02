@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GG Analiza - Auto Tipovi</title>
+<title>GG Analiza - Pro tipster</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: #f4f4f4; font-family: 'Inter', sans-serif; max-width: 680px; margin: 0 auto; padding: 0 0 40px; }
@@ -19,29 +19,30 @@
   @keyframes spin { to { transform: rotate(360deg); } }
   .match-card { background: #fff; border-radius: 10px; border: 1px solid #e0e0e0; margin-bottom: 12px; padding: 12px; transition: 0.2s; }
   .match-header { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 0.7rem; color: #888; }
-  .match-teams { font-size: 1rem; font-weight: 700; margin-bottom: 8px; }
-  .value-badge { background: #22c55e; color: white; font-size: 0.65rem; font-weight: bold; padding: 2px 8px; border-radius: 12px; display: inline-block; }
+  .match-teams { font-size: 1rem; font-weight: 700; margin-bottom: 6px; }
+  .confidence-bar { height: 4px; background: #e0e0e0; border-radius: 2px; margin: 6px 0; overflow: hidden; }
+  .confidence-fill { height: 100%; background: #22c55e; width: 0%; }
+  .value-badge { background: #22c55e; color: white; font-size: 0.65rem; font-weight: bold; padding: 2px 8px; border-radius: 12px; display: inline-block; margin-right: 6px; }
+  .value-high { background: #22c55e; }
+  .value-medium { background: #f59e0b; }
+  .value-low { background: #9ca3af; }
   .stats-grid { display: flex; gap: 12px; margin: 10px 0; }
   .stat { flex: 1; text-align: center; background: #f8f8f8; border-radius: 8px; padding: 6px; }
   .stat-num { font-size: 1.2rem; font-weight: 800; }
   .odds-row { display: flex; gap: 8px; margin-top: 8px; font-size: 0.7rem; color: #555; }
+  .reasoning { background: #f8f8f8; border-radius: 8px; padding: 8px; margin-top: 8px; font-size: 0.7rem; color: #444; border-left: 3px solid #111; }
   hr { margin: 10px 0; border-color: #eee; }
   .error-msg { background: #fff0f0; border: 1px solid #ffcccc; color: #cc0000; padding: 10px; border-radius: 8px; margin-bottom: 12px; display: none; }
 </style>
 </head>
 <body>
 <div class="header">
-  <h1>GG Analiza ⚽ <span class="live-badge">Auto tipovi</span></h1>
-  <p>Narednih 7 dana · Value bet · GG / GG3+</p>
+  <h1>GG Analiza ⚽ <span class="live-badge">Pro tipster</span></h1>
+  <p>H2H · forma · value bet · confidence score</p>
 </div>
 <div class="panel">
   <select id="leagueSelect" class="liga-select">
-    <option value="39">Premier League 🏴󠁧󠁢󠁥󠁮󠁧󠁿</option>
-    <option value="78">Bundesliga 🇩🇪</option>
-    <option value="140">La Liga 🇪🇸</option>
-    <option value="135">Serie A 🇮🇹</option>
-    <option value="61">Ligue 1 🇫🇷</option>
-    <option value="88">Eredivisie 🇳🇱</option>
+    <option value="">Učitavanje najboljih liga...</option>
   </select>
   <button id="fetchBtn" class="btn-primary" onclick="fetchAndAnalyze()">📅 Dohvati ponudu za sedmicu</button>
   <div id="errorMsg" class="error-msg"></div>
@@ -50,10 +51,12 @@
 </div>
 
 <script>
-const BACKEND = 'https://gg-backend-vmuy.onrender.com'; // zamijeni svojim URL-om
+const BACKEND = window.location.origin; // ako je isti server, ili stavi konkretan URL
 
 async function fetchAndAnalyze() {
   const leagueId = document.getElementById('leagueSelect').value;
+  if (!leagueId) return alert('Molimo sačekajte da se učitaju lige ili izaberite ligu.');
+
   const fetchBtn = document.getElementById('fetchBtn');
   const resultsDiv = document.getElementById('results');
   const errorDiv = document.getElementById('errorMsg');
@@ -65,13 +68,11 @@ async function fetchAndAnalyze() {
   loadingDiv.style.display = 'block';
 
   try {
-    // 1. Dohvati upcoming mečeve sa kvotama
     const upcomingRes = await fetch(`${BACKEND}/api/upcoming?leagueId=${leagueId}`);
     if (!upcomingRes.ok) throw new Error(`Greška pri dohvatu mečeva: ${upcomingRes.status}`);
     const matches = await upcomingRes.json();
     if (!matches.length) throw new Error('Nema mečeva u narednih 7 dana za ovu ligu.');
 
-    // 2. Pošalji mečeve na batch analizu
     const analyzeRes = await fetch(`${BACKEND}/api/analyze-batch`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -79,12 +80,10 @@ async function fetchAndAnalyze() {
     });
     if (!analyzeRes.ok) throw new Error(`Greška pri analizi: ${analyzeRes.status}`);
     const results = await analyzeRes.json();
-
-    // 3. Prikaz rezultata
     displayResults(results);
   } catch (err) {
     errorDiv.style.display = 'block';
-    errorDiv.textContent = `⚠️ ${err.message}. Provjeri konzolu i da li je server pokrenut.`;
+    errorDiv.textContent = `⚠️ ${err.message}. Provjeri konzolu i da li server radi.`;
     console.error(err);
   } finally {
     loadingDiv.style.display = 'none';
@@ -100,31 +99,58 @@ function displayResults(results) {
     container.innerHTML = '<div style="text-align:center;padding:30px;color:#bbb;">Nema validnih mečeva za prikaz.</div>';
     return;
   }
-  // Sortiraj po value bet razlici (opadajuće)
-  valid.sort((a,b) => (b.value_gg || 0) - (a.value_gg || 0));
+  valid.sort((a,b) => (parseFloat(b.edge_percent) || 0) - (parseFloat(a.edge_percent) || 0));
   for (const m of valid) {
-    const ggClass = m.gg_percent >= 63 ? 'high' : (m.gg_percent >= 45 ? 'medium' : 'low');
+    const confidence = m.confidence_score || 0;
+    const valueClass = m.value_bet === 'high_value' ? 'value-high' : (m.value_bet === 'medium_value' ? 'value-medium' : 'value-low');
+    const valueLabel = m.value_bet === 'high_value' ? '🎯 HIGH VALUE' : (m.value_bet === 'medium_value' ? '📈 MEDIUM' : '📉 LOW VALUE');
     const card = document.createElement('div');
     card.className = 'match-card';
     card.innerHTML = `
       <div class="match-header">
         <span>${new Date(m.commence_time).toLocaleDateString()}</span>
-        <span>H2H mečeva: ${m.h2h_matches} (GG% ${m.h2h_gg_pct}%)</span>
+        <span>H2H: ${m.h2h_matches} meča (GG ${m.h2h_gg_pct}%)</span>
       </div>
       <div class="match-teams">${m.home} vs ${m.away}</div>
+      <div class="confidence-bar"><div class="confidence-fill" style="width: ${confidence}%;"></div></div>
+      <div style="display: flex; justify-content: space-between; font-size: 0.6rem; margin-bottom: 6px;">
+        <span>Pouzdanost: ${confidence}%</span>
+        <span class="value-badge ${valueClass}">${valueLabel}</span>
+      </div>
       <div class="stats-grid">
         <div class="stat"><div class="stat-num">${m.gg_percent}%</div><div>GG</div>${m.implied_gg_pct ? `<div style="font-size:0.6rem;">impl. ${Math.round(m.implied_gg_pct)}%</div>` : ''}</div>
         <div class="stat"><div class="stat-num">${m.gg3_percent}%</div><div>GG3+</div></div>
         <div class="stat"><div class="stat-num">${m.avg_total}</div><div>avg gol</div></div>
       </div>
-      ${m.odds.btts_yes ? `<div class="odds-row">📊 BTTS kvota: ${m.odds.btts_yes} ~ ${Math.round((1/m.odds.btts_yes)*100)}% impl.</div>` : ''}
-      ${m.value_bet ? `<div><span class="value-badge">🎯 VALUE BET (${Math.round(m.value_gg)}% više od kvote)</span></div>` : ''}
+      ${m.odds?.btts_yes ? `<div class="odds-row">📊 BTTS kvota: ${m.odds.btts_yes} (Edge: ${m.edge_percent}%)</div>` : ''}
+      <div class="reasoning">💡 ${m.reasoning_text || 'Nema dodatnog obrazloženja.'}</div>
       <hr>
       <div style="font-size:0.7rem;color:#555;">Preporuka: ${m.gg_percent >= 63 ? '✅ Igraj GG' : (m.gg_percent >= 45 ? '⚠️ Rizično' : '❌ Izbjegavaj')}</div>
     `;
     container.appendChild(card);
   }
 }
+
+// Učitaj top lige kada se stranica učita
+window.addEventListener('DOMContentLoaded', async () => {
+  const leagueSelect = document.getElementById('leagueSelect');
+  try {
+    const res = await fetch(`${BACKEND}/api/top-leagues`);
+    if (!res.ok) throw new Error('Greška pri učitavanju liga');
+    const leagues = await res.json();
+    if (leagues.length === 0) throw new Error('Nema liga za prikaz');
+    leagueSelect.innerHTML = '';
+    leagues.forEach(league => {
+      const option = document.createElement('option');
+      option.value = league.id;
+      option.textContent = `${league.name} (GG: ${league.gg_percent}%, uzorak: ${league.matches_analyzed})`;
+      leagueSelect.appendChild(option);
+    });
+  } catch (err) {
+    console.error(err);
+    leagueSelect.innerHTML = '<option value="">Greška pri učitavanju liga. Osvježite stranicu.</option>';
+  }
+});
 </script>
 </body>
 </html>
