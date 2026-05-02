@@ -1,9 +1,9 @@
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
-const path = require('path');
 const NodeCache = require('node-cache');
 const pLimit = require('p-limit');
+const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -11,14 +11,12 @@ const PORT = process.env.PORT || 3000;
 app.use(cors({ origin: '*' }));
 app.use(express.json());
 
-// ========== API KLJUČEVI ==========
 const API_FOOTBALL_KEY = process.env.API_FOOTBALL_KEY || '06cba23f71945f8e5ae6e6242d76972a';
 const ODDS_API_KEY = process.env.ODDS_API_KEY;
 
 const API_FOOTBALL_URL = 'https://v3.football.api-sports.io';
 const ODDS_API_URL = 'https://api.the-odds-api.com/v4';
 
-// ========== LIGA KONFIGURACIJA ==========
 const LIGA_CONFIG = {
   39:  { name: 'Premier League',    faktor: 1.00, bazaGG: 52, sport_key: 'soccer_england_premier_league' },
   78:  { name: 'Bundesliga',        faktor: 1.05, bazaGG: 56, sport_key: 'soccer_germany_bundesliga' },
@@ -28,12 +26,10 @@ const LIGA_CONFIG = {
   88:  { name: 'Eredivisie',        faktor: 1.05, bazaGG: 57, sport_key: 'soccer_netherlands_eredivisie' },
 };
 
-// ========== KEŠIRANJE ==========
 const cache = new NodeCache({ stdTTL: 86400, maxKeys: 500, checkperiod: 3600 });
 function getCache(key) { return cache.get(key); }
 function setCache(key, data) { cache.set(key, data); }
 
-// ========== HELPER ZA API-FOOTBALL ==========
 async function apiFootball(endpoint, params) {
   try {
     const res = await axios.get(`${API_FOOTBALL_URL}${endpoint}`, {
@@ -46,7 +42,6 @@ async function apiFootball(endpoint, params) {
   }
 }
 
-// ========== FUZZY MATCHING IMENA TIMOVA ==========
 const TEAM_NAME_MAP = {
   "Man Utd": "Manchester United", "Man United": "Manchester United", "Tottenham": "Tottenham Hotspur",
   "Spurs": "Tottenham Hotspur", "Newcastle": "Newcastle United", "Leeds": "Leeds United",
@@ -72,7 +67,6 @@ async function getTeamId(name) {
   return id;
 }
 
-// ========== STATISTIKE SA FALLBACK ==========
 async function getTeamStatsSeason(teamId, leagueId, season) {
   const cacheKey = `stats_${teamId}_${leagueId}_${season}`;
   let data = getCache(cacheKey);
@@ -145,7 +139,6 @@ async function getH2H(homeId, awayId) {
   return result;
 }
 
-// ========== GLAVNA ANALIZA SA POBOLJŠANJIMA ==========
 async function analyzeMatch(home, away, leagueId) {
   const liga = LIGA_CONFIG[leagueId] || LIGA_CONFIG[39];
   const [homeId, awayId] = await Promise.all([getTeamId(home), getTeamId(away)]);
@@ -195,43 +188,17 @@ async function analyzeMatch(home, away, leagueId) {
   };
 }
 
-// ========== ENDPOINT ZA TOP LIGE ==========
-app.get('/api/top-leagues', async (req, res) => {
-  const cacheKey = 'top_leagues_gg_rank';
-  let cached = getCache(cacheKey);
-  if (cached) return res.json(cached);
-
-  const allLeagues = await apiFootball('/leagues');
-  if (!allLeagues.length) return res.json([]);
-
-  const season = 2024;
-  const leaguesWithStats = [];
-  for (const league of allLeagues) {
-    const leagueId = league.league.id;
-    const leagueName = league.league.name;
-    const leagueCountry = league.country.name;
-    const isCurrent = league.seasons?.some(s => s.year === season && s.current);
-    if (league.league.type !== 'League' || !isCurrent) continue;
-    const fixtures = await apiFootball('/fixtures', { league: leagueId, season, status: 'FT' });
-    if (fixtures.length < 100) continue;
-    let totalBtts = 0;
-    fixtures.forEach(f => {
-      if ((f.goals?.home ?? 0) > 0 && (f.goals?.away ?? 0) > 0) totalBtts++;
-    });
-    const ggPercent = (totalBtts / fixtures.length) * 100;
-    leaguesWithStats.push({
-      id: leagueId,
-      name: `${leagueCountry} - ${leagueName}`,
-      gg_percent: Math.round(ggPercent),
-      matches_analyzed: fixtures.length
-    });
-  }
-  const sorted = leaguesWithStats.sort((a,b) => b.gg_percent - a.gg_percent).slice(0, 10);
-  setCache(cacheKey, sorted);
+app.get('/api/top-leagues', (req, res) => {
+  const leagues = Object.entries(LIGA_CONFIG).map(([id, cfg]) => ({
+    id: parseInt(id),
+    name: cfg.name,
+    gg_percent: cfg.bazaGG,
+    matches_analyzed: 380
+  }));
+  const sorted = leagues.sort((a, b) => b.gg_percent - a.gg_percent);
   res.json(sorted);
 });
 
-// ========== ENDPOINT ZA UPCOMING MEČEVE (ODDS API) ==========
 app.get('/api/upcoming', async (req, res) => {
   const { leagueId } = req.query;
   if (!leagueId || !LIGA_CONFIG[leagueId]) return res.status(400).json({ error: 'Nepoznata liga' });
@@ -270,7 +237,6 @@ app.get('/api/upcoming', async (req, res) => {
   }
 });
 
-// ========== BATCH ANALIZA SA VALUE BET ==========
 const limit = pLimit(3);
 app.post('/api/analyze-batch', async (req, res) => {
   const { matches, leagueId } = req.body;
@@ -330,9 +296,10 @@ app.post('/api/analyze-batch', async (req, res) => {
   res.json(results);
 });
 
-// ========== HEALTH ==========
-app.get('/api/health', (req, res) => res.json({ status: 'ok', cacheSize: cache.keys().length }));
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
+
+app.get('/api/health', (req, res) => res.json({ status: 'ok', cacheSize: cache.keys().length }));
+
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
