@@ -332,5 +332,7 @@ app.post('/api/analyze-batch', async (req, res) => {
 
 // ========== HEALTH ==========
 app.get('/api/health', (req, res) => res.json({ status: 'ok', cacheSize: cache.keys().length }));
-
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'index.html'));
+});
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
