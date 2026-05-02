@@ -196,40 +196,34 @@ app.get('/api/top-leagues', (req, res) => {
   res.json(sorted);
 });
 
+// NOVI ENDPOINT - dohvata sve mečeve odjednom (umjesto po ligi)
 app.get('/api/upcoming', async (req, res) => {
-  const { leagueId } = req.query;
-  if (!leagueId || !LIGA_CONFIG[leagueId]) return res.status(400).json({ error: 'Nepoznata liga' });
-  const liga = LIGA_CONFIG[leagueId];
   if (!ODDS_API_KEY) return res.status(500).json({ error: 'ODDS_API_KEY nije postavljen' });
 
-  const cacheKey = `upcoming_${leagueId}`;
+  const cacheKey = 'all_matches';
   let cached = getCache(cacheKey);
   if (cached) return res.json(cached);
 
   try {
-    const eventsUrl = `${ODDS_API_URL}/sports/${liga.sport_key}/events?apiKey=${ODDS_API_KEY}`;
-    const eventsRes = await axios.get(eventsUrl);
-    const events = eventsRes.data || [];
-    if (!events.length) return res.json([]);
-
-    const oddsPromises = events.map(async (event) => {
-      try {
-        const oddsUrl = `${ODDS_API_URL}/sports/${liga.sport_key}/events/${event.id}/odds?apiKey=${ODDS_API_KEY}&regions=eu&markets=btts&bookmakers=bet365`;
-        const oddsRes = await axios.get(oddsUrl);
-        const bookmaker = oddsRes.data.bookmakers?.[0];
-        const btts = bookmaker?.markets?.find(m => m.key === 'btts')?.outcomes;
-        return {
-          id: event.id, home: event.home_team, away: event.away_team,
-          commence_time: event.commence_time,
-          odds: { btts_yes: btts?.find(o => o.name === 'Yes')?.price }
-        };
-      } catch (e) { return null; }
-    });
-    const matches = (await Promise.all(oddsPromises)).filter(m => m !== null);
+    const url = `${ODDS_API_URL}/odds/?sport=soccer&apiKey=${ODDS_API_KEY}&regions=eu&markets=btts&bookmakers=bet365`;
+    const oddsRes = await axios.get(url);
+    const events = oddsRes.data || [];
+    const matches = events.map(event => {
+      const bookmaker = event.bookmakers?.[0];
+      const btts = bookmaker?.markets?.find(m => m.key === 'btts')?.outcomes;
+      return {
+        id: event.id,
+        home: event.home_team,
+        away: event.away_team,
+        commence_time: event.commence_time,
+        sport_key: event.sport_key,
+        odds: { btts_yes: btts?.find(o => o.name === 'Yes')?.price }
+      };
+    }).filter(m => m.odds.btts_yes);
     setCache(cacheKey, matches);
     res.json(matches);
   } catch (err) {
-    console.error('Upcoming error:', err.message);
+    console.error('Odds API error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
