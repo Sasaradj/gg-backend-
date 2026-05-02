@@ -1,80 +1,23 @@
 <!DOCTYPE html>
-<html lang="bs">
+<html>
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GG Analiza - Pro tipster</title>
-<style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: #f4f4f4; font-family: Arial, sans-serif; max-width: 680px; margin: 0 auto; padding: 20px; }
-  .btn { width: 100%; padding: 12px; background: #111; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; margin-bottom: 12px; }
-  .match-card { background: white; border-radius: 10px; border: 1px solid #ddd; margin-bottom: 12px; padding: 12px; }
-  .match-teams { font-size: 1rem; font-weight: bold; margin-bottom: 6px; }
-  .stats { display: flex; gap: 10px; margin: 8px 0; }
-  .stat { flex: 1; text-align: center; background: #f8f8f8; border-radius: 8px; padding: 6px; }
-  .stat-num { font-size: 1.2rem; font-weight: bold; }
-  .reasoning { background: #f8f8f8; padding: 8px; margin-top: 8px; font-size: 0.7rem; }
-  .loading { text-align: center; padding: 30px; display: none; }
-  .spinner { border: 2px solid #eee; border-top-color: #111; border-radius: 50%; width: 28px; height: 28px; animation: spin 0.7s linear infinite; margin: 0 auto; }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  .error { background: #fff0f0; border: 1px solid #ffcccc; color: #cc0000; padding: 10px; border-radius: 8px; margin-bottom: 12px; display: none; }
-</style>
+<title>GG Analiza - Test</title>
 </head>
 <body>
 <h1>GG Analiza ⚽</h1>
-<button id="fetchBtn" class="btn" onclick="fetchAndAnalyze()">📅 Dohvati sve mečeve</button>
-<div id="errorMsg" class="error"></div>
-<div id="loading" class="loading"><div class="spinner"></div><div>Učitavam...</div></div>
-<div id="results"></div>
-
+<select id="leagueSelect">
+  <option value="soccer_italy_serie_a">Serie A</option>
+  <option value="soccer_epl">Premier League</option>
+  <option value="soccer_germany_bundesliga">Bundesliga</option>
+</select>
+<button onclick="fetchMatches()">Dohvati mečeve</button>
+<pre id="results"></pre>
 <script>
-const BACKEND = window.location.origin;
-
-async function fetchAndAnalyze() {
-  const fetchBtn = document.getElementById('fetchBtn');
-  const resultsDiv = document.getElementById('results');
-  const errorDiv = document.getElementById('errorMsg');
-  const loadingDiv = document.getElementById('loading');
-
-  fetchBtn.disabled = true;
-  errorDiv.style.display = 'none';
-  resultsDiv.innerHTML = '';
-  loadingDiv.style.display = 'block';
-
-  try {
-    // Dohvati sve mečeve sa kvotama
-    const upcomingRes = await fetch(`${BACKEND}/api/upcoming`);
-    if (!upcomingRes.ok) throw new Error(`Greška: ${upcomingRes.status}`);
-    const matches = await upcomingRes.json();
-    if (!matches.length) throw new Error('Nema mečeva u narednih 7 dana.');
-
-    // (Ovdje bi išla analiza - ali pošto nema leagueId, moraš odlučiti kako)
-    // Za sada samo prikaži listu mečeva sa kvotama
-    displayMatches(matches);
-  } catch (err) {
-    errorDiv.style.display = 'block';
-    errorDiv.textContent = `⚠️ ${err.message}`;
-  } finally {
-    loadingDiv.style.display = 'none';
-    fetchBtn.disabled = false;
-  }
-}
-
-function displayMatches(matches) {
-  const container = document.getElementById('results');
-  container.innerHTML = '';
-  for (const m of matches) {
-    const card = document.createElement('div');
-    card.className = 'match-card';
-    card.innerHTML = `
-      <div class="match-teams">${m.home} vs ${m.away}</div>
-      <div class="stats">
-        <div class="stat"><div class="stat-num">${m.odds.btts_yes || '?'}</div><div>BTTS kvota</div></div>
-      </div>
-      <div class="reasoning">Datum: ${new Date(m.commence_time).toLocaleString()}</div>
-    `;
-    container.appendChild(card);
-  }
+async function fetchMatches() {
+  const sportKey = document.getElementById('leagueSelect').value;
+  const res = await fetch(`/api/matches?sport_key=${sportKey}`);
+  const data = await res.json();
+  document.getElementById('results').innerHTML = JSON.stringify(data, null, 2);
 }
 </script>
 </body>
