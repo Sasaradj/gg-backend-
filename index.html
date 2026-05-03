@@ -1,24 +1,591 @@
 <!DOCTYPE html>
-<html>
+<html lang="bs">
 <head>
-<title>GG Analiza - Test</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Ticket Analytics | v2.2 / v4.0</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background: #0b0f1c;
+            font-family: system-ui, -apple-system, 'Segoe UI', 'Inter', 'Roboto', monospace;
+            padding: 16px 12px 40px;
+            color: #eef2ff;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        /* header */
+        .top-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #2a2f42;
+            padding-bottom: 12px;
+        }
+        h1 {
+            font-size: 1.55rem;
+            font-weight: 600;
+            letter-spacing: -0.3px;
+            background: linear-gradient(135deg, #f5b042, #e0e7ff);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+        .badge-version {
+            font-size: 0.65rem;
+            background: #1e243b;
+            padding: 4px 8px;
+            border-radius: 40px;
+            color: #9ca3cf;
+        }
+
+        /* kartice za parove */
+        .match-card {
+            background: #111827;
+            border-radius: 24px;
+            padding: 16px;
+            margin-bottom: 18px;
+            box-shadow: 0 6px 12px rgba(0,0,0,0.3);
+            transition: all 0.1s;
+            border-left: 6px solid #2a2f42;
+        }
+        .match-card.gold-card {
+            border-left-color: #f5b042;
+            background: #1a1f2e;
+        }
+        .match-card.pass-card {
+            border-left-color: #5a607b;
+            background: #0f1320;
+        }
+
+        .flex-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-bottom: 12px;
+            align-items: center;
+        }
+        .input-group {
+            flex: 1;
+            min-width: 130px;
+        }
+        .input-group label {
+            display: block;
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+            color: #8b92b0;
+            margin-bottom: 4px;
+        }
+        input, select {
+            width: 100%;
+            background: #1e243b;
+            border: 1px solid #2f354e;
+            padding: 10px 12px;
+            border-radius: 16px;
+            color: white;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+        input:focus, select:focus {
+            outline: none;
+            border-color: #f5b042;
+        }
+
+        .row-actions {
+            display: flex;
+            gap: 12px;
+            margin-top: 10px;
+            justify-content: flex-end;
+        }
+        .btn-sm, .btn-add {
+            background: #2a2f47;
+            border: none;
+            padding: 8px 14px;
+            border-radius: 40px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: #eef2ff;
+            cursor: pointer;
+            transition: 0.1s;
+        }
+        .btn-add {
+            background: #3b4259;
+            flex: 1;
+            text-align: center;
+        }
+        .btn-add.gold-add {
+            background: #f5b042;
+            color: #0b0f1c;
+        }
+        .btn-sm.reset-match {
+            background: #2c2f3f;
+        }
+        .status-badge {
+            font-size: 0.7rem;
+            padding: 4px 10px;
+            border-radius: 30px;
+            background: #1e293b;
+            font-weight: 600;
+        }
+        .status-gold { background: #f5b04220; color: #f5b042; border: 1px solid #f5b042; }
+        .status-pass { background: #4b556320; color: #a0a9c7; border: 1px solid #4b5563; }
+
+        /* ticket builder */
+        .ticket-panel {
+            background: #0c1020;
+            border-radius: 28px;
+            padding: 18px;
+            margin: 24px 0 20px;
+            border: 1px solid #2a2f42;
+        }
+        .ticket-title {
+            font-size: 1.2rem;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+        .ticket-details {
+            background: #00000030;
+            padding: 12px;
+            border-radius: 20px;
+            margin: 12px 0;
+        }
+        .ticket-stats {
+            display: flex;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            font-size: 0.8rem;
+        }
+        .ticket-item {
+            display: flex;
+            justify-content: space-between;
+            border-bottom: 1px solid #222842;
+            padding: 8px 0;
+            font-size: 0.8rem;
+        }
+        .clear-ticket {
+            background: #2e1a2a;
+            border: 1px solid #b84c6c;
+            margin-top: 10px;
+        }
+
+        /* statistika */
+        .stats-section {
+            margin-top: 28px;
+        }
+        .log-table {
+            width: 100%;
+            font-size: 0.7rem;
+            border-collapse: collapse;
+        }
+        .log-table th, .log-table td {
+            padding: 8px 5px;
+            border-bottom: 1px solid #202536;
+            text-align: left;
+        }
+        .win { color: #4ade80; font-weight: bold; }
+        .loss { color: #f87171; font-weight: bold; }
+        button {
+            background: #283045;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 40px;
+            color: white;
+            font-size: 0.7rem;
+            cursor: pointer;
+        }
+        .export-btn {
+            background: #1b2a47;
+            margin-top: 12px;
+            width: 100%;
+            font-weight: 500;
+        }
+        hr {
+            border-color: #242a3e;
+            margin: 16px 0;
+        }
+    </style>
 </head>
 <body>
-<h1>GG Analiza ⚽</h1>
-<select id="leagueSelect">
-  <option value="soccer_italy_serie_a">Serie A</option>
-  <option value="soccer_epl">Premier League</option>
-  <option value="soccer_germany_bundesliga">Bundesliga</option>
-</select>
-<button onclick="fetchMatches()">Dohvati mečeve</button>
-<pre id="results"></pre>
+<div class="container">
+    <div class="top-bar">
+        <h1>🎯 TICKET HUB</h1>
+        <div class="badge-version">v2.2 · v4.0</div>
+    </div>
+
+    <!-- TICKET BUILDER PREVIEW -->
+    <div class="ticket-panel" id="ticketPanel">
+        <div class="ticket-title">🎫 MOJ TIKET <span id="ticketCount">0</span>/5</div>
+        <div id="ticketListContainer">--- nema odabranih parova ---</div>
+        <div class="ticket-details" id="ticketStats" style="display: none;">
+            <div class="ticket-stats">
+                <span>📊 Ukupna kvota: <strong id="totalOdds">0.00</strong></span>
+                <span>🎲 Šansa prolaza: <strong id="totalProb">0.00</strong>%</span>
+            </div>
+        </div>
+        <button id="clearTicketBtn" class="btn-sm clear-ticket" style="width:100%">✖️ Isprazni tiket</button>
+    </div>
+
+    <!-- DODAVANJE NOVOG PARA -->
+    <div style="margin-bottom: 12px; display: flex; justify-content: space-between; align-items: baseline;">
+        <p style="font-weight:500; font-size:0.9rem;">📋 Analitički parovi</p>
+        <button id="addEmptyMatchBtn" style="background:#2e3a55;">+ Dodaj par</button>
+    </div>
+    <div id="matchesContainer"></div>
+
+    <!-- LOG ISHODA -->
+    <div class="stats-section">
+        <div style="display: flex; justify-content: space-between;">
+            <span>📋 ARHIVA ISHODA</span>
+            <button id="clearLogBtn" style="background:#2a1e2a;">Obriši log</button>
+        </div>
+        <hr>
+        <div style="max-height: 260px; overflow-y: auto;">
+            <table class="log-table" id="logTable">
+                <thead><tr><th>Par</th><th>Model</th><th>Igra</th><th>P%</th><th>Kvota</th><th>Ishod</th></tr></thead>
+                <tbody id="logBody"></tbody>
+            </table>
+        </div>
+        <button id="exportDeepseekBtn" class="export-btn">📤 DeepSeek Export (tekstualni izvještaj)</button>
+    </div>
+</div>
+
 <script>
-async function fetchMatches() {
-  const sportKey = document.getElementById('leagueSelect').value;
-  const res = await fetch(`/api/matches?sport_key=${sportKey}`);
-  const data = await res.json();
-  document.getElementById('results').innerHTML = JSON.stringify(data, null, 2);
-}
+    // ---------- GLOBAL STATE ----------
+    let matches = [];       // objekti: id, name, league, model, market, prob, odds, won (null/true/false)
+    let ticketIds = [];     // niz id-eva koji su na tiketu (max 5)
+    let nextId = 1;
+    let logEntries = [];    // { matchStr, model, market, prob, odds, outcome }
+
+    // DOM elementi
+    const matchesContainer = document.getElementById('matchesContainer');
+    const ticketListContainer = document.getElementById('ticketListContainer');
+    const ticketStatsDiv = document.getElementById('ticketStats');
+    const totalOddsSpan = document.getElementById('totalOdds');
+    const totalProbSpan = document.getElementById('totalProb');
+    const ticketCountSpan = document.getElementById('ticketCount');
+    const clearTicketBtn = document.getElementById('clearTicketBtn');
+    const addEmptyMatchBtn = document.getElementById('addEmptyMatchBtn');
+    const logBody = document.getElementById('logBody');
+    const clearLogBtn = document.getElementById('clearLogBtn');
+    const exportDeepseekBtn = document.getElementById('exportDeepseekBtn');
+
+    // helper: render svega
+    function renderAll() {
+        renderMatches();
+        renderTicketBuilder();
+        renderLogTable();
+    }
+
+    // kategorizacija GOLD / PASS na osnovu P%
+    function getCategory(prob) {
+        if (prob >= 65) return 'GOLD';
+        if (prob >= 55 && prob < 65) return 'PASS';
+        return 'LOW'; // ispod 55 nije ni PASS po pravilu, ali za vizuelno
+    }
+
+    // dodavanje novog praznog para
+    function addMatch() {
+        const newMatch = {
+            id: nextId++,
+            name: "",
+            league: "",
+            model: "Model Elite v2.2",
+            market: "GG",
+            prob: 60,
+            odds: 1.85,
+            won: null
+        };
+        matches.push(newMatch);
+        renderAll();
+    }
+
+    // ažuriranje polja
+    function updateMatchField(id, field, value) {
+        const match = matches.find(m => m.id === id);
+        if (!match) return;
+        if (field === 'prob') {
+            let v = parseFloat(value);
+            if (isNaN(v)) v = 50;
+            v = Math.min(100, Math.max(0, v));
+            match.prob = v;
+        } else if (field === 'odds') {
+            let v = parseFloat(value);
+            if (isNaN(v)) v = 1.00;
+            match.odds = v;
+        } else if (field === 'name') match.name = value;
+        else if (field === 'league') match.league = value;
+        else if (field === 'model') match.model = value;
+        else if (field === 'market') match.market = value;
+        renderAll();
+    }
+
+    // dodaj/ukloni sa tiketa
+    function toggleTicket(matchId) {
+        const idx = ticketIds.indexOf(matchId);
+        if (idx !== -1) {
+            ticketIds.splice(idx, 1);
+        } else {
+            if (ticketIds.length >= 5) {
+                alert("Maksimalno 5 parova na tiketu!");
+                return;
+            }
+            ticketIds.push(matchId);
+        }
+        renderAll();
+    }
+
+    // postavi ishod (win/loss) za match
+    function setOutcome(matchId, outcome) { // outcome: 'win' or 'loss'
+        const match = matches.find(m => m.id === matchId);
+        if (!match) return;
+        if (match.won !== null) return; // vec uneseno? ipak dozvoli promjenu
+        match.won = (outcome === 'win');
+        // dodaj u log
+        const matchStr = `${match.name} (${match.league})`.trim() || `Meč ${match.id}`;
+        logEntries.unshift({
+            matchStr: matchStr,
+            model: match.model,
+            market: match.market,
+            prob: match.prob,
+            odds: match.odds,
+            outcome: outcome === 'win' ? 'WIN' : 'LOSS'
+        });
+        renderAll();
+    }
+
+    // reset tiketa
+    function clearTicket() {
+        ticketIds = [];
+        renderAll();
+    }
+
+    // clear log
+    function clearLog() {
+        logEntries = [];
+        renderAll();
+    }
+
+    // Export za DeepSeek
+    function exportDeepSeek() {
+        let output = "DEEPSEEK TIPSTER ANALITIKA IZVOZ:\n\n";
+        output += `UKUPNO PRIJAVLJENIH ISHODA: ${logEntries.length}\n`;
+        output += "========================================\n";
+        logEntries.forEach((entry, idx) => {
+            output += `${idx+1}. ${entry.matchStr} | Model: ${entry.model} | Tržište: ${entry.market} | P%: ${entry.prob}% | Kvota: ${entry.odds} | Ishod: ${entry.outcome}\n`;
+        });
+        if (logEntries.length === 0) output += "Još nema evidentiranih ishoda.\n";
+        output += "\n--- AKTIVNI TIKET ---\n";
+        const activeMatchesOnTicket = ticketIds.map(id => matches.find(m => m.id === id)).filter(m => m);
+        if (activeMatchesOnTicket.length) {
+            let productOdds = 1;
+            let productProb = 1;
+            activeMatchesOnTicket.forEach(m => {
+                productOdds *= m.odds;
+                productProb *= (m.prob / 100);
+                output += `- ${m.name || 'Bez naziva'} (${m.league || '?'}) | ${m.model} | ${m.market} | P=${m.prob}% | Kvota=${m.odds}\n`;
+            });
+            output += `\nUkupna kvota: ${productOdds.toFixed(2)} | Šansa prolaza: ${(productProb * 100).toFixed(2)}%\n`;
+        } else {
+            output += "Tiket prazan.\n";
+        }
+        navigator.clipboard.writeText(output).then(() => {
+            alert("Izvještaj kopiran! Možeš poslati DeepSeek-u.");
+        }).catch(() => alert("Neuspješno kopiranje"));
+    }
+
+    // render svih match kartica
+    function renderMatches() {
+        if (!matchesContainer) return;
+        matchesContainer.innerHTML = '';
+        matches.forEach(match => {
+            const cat = getCategory(match.prob);
+            const cardClass = cat === 'GOLD' ? 'gold-card' : (cat === 'PASS' ? 'pass-card' : '');
+            const isOnTicket = ticketIds.includes(match.id);
+            const addBtnText = isOnTicket ? '⛔ Ukloni s tiketa' : '➕ Dodaj na tiket';
+            const addBtnClass = (cat === 'GOLD' && !isOnTicket) ? 'gold-add' : '';
+
+            const card = document.createElement('div');
+            card.className = `match-card ${cardClass}`;
+            card.innerHTML = `
+                <div class="flex-row">
+                    <div class="input-group" style="flex:2">
+                        <label>PAR / LIGA</label>
+                        <input type="text" placeholder="npr. Celta - Barcelona" value="${escapeHtml(match.name)}" data-field="name" data-id="${match.id}">
+                        <input type="text" placeholder="Liga" value="${escapeHtml(match.league)}" data-field="league" data-id="${match.id}" style="margin-top:6px">
+                    </div>
+                    <div class="input-group">
+                        <label>MODEL</label>
+                        <select data-field="model" data-id="${match.id}">
+                            <option ${match.model === 'Model Elite v2.2' ? 'selected' : ''}>Model Elite v2.2</option>
+                            <option ${match.model === 'Model Exotic v4.0' ? 'selected' : ''}>Model Exotic v4.0</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="flex-row">
+                    <div class="input-group">
+                        <label>IGRA</label>
+                        <select data-field="market" data-id="${match.id}">
+                            <option ${match.market === 'GG' ? 'selected' : ''}>GG</option>
+                            <option ${match.market === 'GG3+' ? 'selected' : ''}>GG3+</option>
+                            <option ${match.market === '2+' ? 'selected' : ''}>2+</option>
+                        </select>
+                    </div>
+                    <div class="input-group">
+                        <label>P% (vjerovatnoća)</label>
+                        <input type="number" step="1" value="${match.prob}" data-field="prob" data-id="${match.id}">
+                    </div>
+                    <div class="input-group">
+                        <label>KVOTA</label>
+                        <input type="number" step="0.01" value="${match.odds}" data-field="odds" data-id="${match.id}">
+                    </div>
+                </div>
+                <div class="row-actions">
+                    <span class="status-badge ${cat === 'GOLD' ? 'status-gold' : 'status-pass'}">${cat === 'GOLD' ? '🏆 GOLD' : (cat === 'PASS' ? '⚪ PASS' : 'LOW')}</span>
+                    <button class="btn-add ${addBtnClass}" data-add-id="${match.id}">${addBtnText}</button>
+                    <button class="btn-sm reset-match" data-reset-id="${match.id}">🔄 reset ishoda</button>
+                </div>
+                <div style="display:flex; gap:10px; margin-top: 10px;">
+                    <button class="btn-sm" data-win-id="${match.id}" style="background:#14532d;">✅ WIN</button>
+                    <button class="btn-sm" data-loss-id="${match.id}" style="background:#7f1a1a;">❌ LOSS</button>
+                </div>
+            `;
+            matchesContainer.appendChild(card);
+        });
+
+        // event binding za dinamičke elemente
+        document.querySelectorAll('input[data-field], select[data-field]').forEach(el => {
+            const field = el.dataset.field;
+            const id = parseInt(el.dataset.id);
+            const handler = (e) => {
+                updateMatchField(id, field, e.target.value);
+            };
+            el.removeEventListener('input', handler);
+            el.addEventListener('input', handler);
+            if (el.tagName === 'SELECT') {
+                el.removeEventListener('change', handler);
+                el.addEventListener('change', handler);
+            }
+        });
+        document.querySelectorAll('[data-add-id]').forEach(btn => {
+            const id = parseInt(btn.dataset.addId);
+            btn.onclick = () => toggleTicket(id);
+        });
+        document.querySelectorAll('[data-reset-id]').forEach(btn => {
+            const id = parseInt(btn.dataset.resetId);
+            btn.onclick = () => {
+                const match = matches.find(m => m.id === id);
+                if (match) match.won = null;
+                renderAll();
+            };
+        });
+        document.querySelectorAll('[data-win-id]').forEach(btn => {
+            const id = parseInt(btn.dataset.winId);
+            btn.onclick = () => setOutcome(id, 'win');
+        });
+        document.querySelectorAll('[data-loss-id]').forEach(btn => {
+            const id = parseInt(btn.dataset.lossId);
+            btn.onclick = () => setOutcome(id, 'loss');
+        });
+    }
+
+    // ticket builder
+    function renderTicketBuilder() {
+        const selectedMatches = ticketIds.map(id => matches.find(m => m.id === id)).filter(m => m);
+        ticketCountSpan.innerText = selectedMatches.length;
+        if (selectedMatches.length === 0) {
+            ticketListContainer.innerHTML = '--- nema odabranih parova ---';
+            ticketStatsDiv.style.display = 'none';
+            return;
+        }
+        let productOdds = 1;
+        let productProb = 1;
+        let html = '';
+        selectedMatches.forEach(m => {
+            productOdds *= m.odds;
+            productProb *= (m.prob / 100);
+            html += `<div class="ticket-item">
+                        <span><strong>${m.name || '??? par'}</strong> (${m.league || 'Liga'}) - ${m.market}</span>
+                        <span>P:${m.prob}% | kv:${m.odds}</span>
+                     </div>`;
+        });
+        ticketListContainer.innerHTML = html;
+        const totalProbPercent = (productProb * 100).toFixed(2);
+        totalOddsSpan.innerText = productOdds.toFixed(2);
+        totalProbSpan.innerText = totalProbPercent;
+        ticketStatsDiv.style.display = 'block';
+    }
+
+    function renderLogTable() {
+        if (!logBody) return;
+        logBody.innerHTML = '';
+        logEntries.forEach(entry => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${escapeHtml(entry.matchStr)}</td>
+                <td>${escapeHtml(entry.model)}</td>
+                <td>${escapeHtml(entry.market)}</td>
+                <td>${entry.prob}%</td>
+                <td>${entry.odds}</td>
+                <td class="${entry.outcome === 'WIN' ? 'win' : 'loss'}">${entry.outcome}</td>
+            `;
+            logBody.appendChild(row);
+        });
+        if (logEntries.length === 0) {
+            const emptyRow = document.createElement('tr');
+            emptyRow.innerHTML = '<td colspan="6" style="text-align:center">Nema evidentiranih ishoda</td>';
+            logBody.appendChild(emptyRow);
+        }
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return str.replace(/[&<>]/g, function(m) {
+            if (m === '&') return '&amp;';
+            if (m === '<') return '&lt;';
+            if (m === '>') return '&gt;';
+            return m;
+        });
+    }
+
+    // eventi globalni
+    clearTicketBtn.onclick = () => clearTicket();
+    addEmptyMatchBtn.onclick = () => addMatch();
+    clearLogBtn.onclick = () => clearLog();
+    exportDeepseekBtn.onclick = () => exportDeepSeek();
+
+    // inicijalno 2 primjera radi demonstracije (ali prazna polja)
+    addMatch(); // match 1
+    addMatch(); // match 2
+    // lagano popuni demo podacima (neobavezno)
+    if (matches[0]) {
+        matches[0].name = "Celta Vigo - Barcelona";
+        matches[0].league = "La Liga";
+        matches[0].model = "Model Elite v2.2";
+        matches[0].market = "GG3+";
+        matches[0].prob = 72;
+        matches[0].odds = 2.10;
+    }
+    if (matches[1]) {
+        matches[1].name = "Elversberg - Paderborn";
+        matches[1].league = "2. Bundesliga";
+        matches[1].model = "Model Exotic v4.0";
+        matches[1].market = "GG";
+        matches[1].prob = 68;
+        matches[1].odds = 1.79;
+    }
+    renderAll();
 </script>
 </body>
 </html>
