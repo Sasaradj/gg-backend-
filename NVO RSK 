@@ -1,0 +1,848 @@
+<!DOCTYPE html>
+<html lang="sr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RS i RSK u Srbiji — Registar</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap');
+
+:root {
+  --bg: #f4f5f7;
+  --surface: #fff;
+  --surface2: #f0f2f5;
+  --border: #e2e5ea;
+  --accent: #2563eb;
+  --green: #16a34a;
+  --red: #dc2626;
+  --amber: #d97706;
+  --purple: #7c3aed;
+  --text: #111827;
+  --text2: #6b7280;
+  --text3: #9ca3af;
+  --radius: 12px;
+  --shadow: 0 1px 4px rgba(0,0,0,0.08);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'IBM Plex Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; font-size: 14px; }
+
+/* LOCK */
+#lockScreen {
+  position: fixed; inset: 0; z-index: 1000;
+  display: flex; align-items: center; justify-content: center; padding: 24px;
+  background: rgba(244,245,247,0.4);
+  backdrop-filter: blur(22px); -webkit-backdrop-filter: blur(22px);
+}
+.lock-box {
+  background: #fff; border: 1px solid var(--border); border-radius: 20px;
+  padding: 32px 28px; width: 100%; max-width: 340px;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.13); text-align: center;
+}
+.lock-logo { font-size: 40px; margin-bottom: 10px; }
+.lock-box h2 { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+.lock-box p { font-size: 13px; color: var(--text2); margin-bottom: 22px; }
+.lock-box input {
+  width: 100%; background: var(--surface2); border: 1.5px solid var(--border);
+  border-radius: 10px; padding: 13px 16px; color: var(--text);
+  font-size: 16px; font-family: 'IBM Plex Mono', monospace; outline: none;
+  margin-bottom: 12px; text-align: center; transition: border-color 0.2s;
+}
+.lock-box input:focus { border-color: var(--accent); }
+.lock-box input.error { border-color: var(--red); background: #fff5f5; }
+.lock-btn {
+  width: 100%; padding: 13px; background: var(--accent); color: #fff;
+  border: none; border-radius: 10px; font-size: 15px; font-weight: 700;
+  cursor: pointer; font-family: inherit; margin-bottom: 14px;
+}
+.lock-hint { font-size: 11px; color: var(--text3); }
+
+/* HEADER */
+.header { background: var(--accent); padding: 14px 16px 0; position: sticky; top: 0; z-index: 100; }
+.header-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.header-title h1 { font-size: 17px; font-weight: 700; color: #fff; }
+.header-title p { font-size: 11px; color: rgba(255,255,255,0.7); margin-top: 2px; }
+.btn-lock {
+  background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3);
+  color: #fff; padding: 6px 12px; border-radius: 8px; font-size: 12px;
+  cursor: pointer; font-family: inherit;
+}
+
+/* STATS */
+.stats { display: grid; grid-template-columns: repeat(4,1fr); gap: 6px; margin-bottom: 12px; }
+.stat { background: rgba(255,255,255,0.15); border-radius: 10px; padding: 8px 4px; text-align: center; }
+.stat-num { font-family: 'IBM Plex Mono', monospace; font-size: 20px; font-weight: 700; color: #fff; line-height: 1; }
+.stat-num.amber { color: #fcd34d; }
+.stat-num.green { color: #6ee7b7; }
+.stat-num.purple { color: #c4b5fd; }
+.stat-label { font-size: 9px; color: rgba(255,255,255,0.65); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 3px; }
+
+/* TABS */
+.tabs { display: flex; margin: 0 -16px; padding: 0 8px; overflow-x: auto; scrollbar-width: none; border-top: 1px solid rgba(255,255,255,0.15); }
+.tabs::-webkit-scrollbar { display: none; }
+.tab { padding: 11px 18px; font-size: 13px; font-weight: 500; color: rgba(255,255,255,0.65); cursor: pointer; border-bottom: 2px solid transparent; white-space: nowrap; user-select: none; }
+.tab.active { color: #fff; border-bottom-color: #fff; }
+
+/* TOOLBAR */
+.toolbar { padding: 10px 16px; display: flex; gap: 8px; align-items: center; background: var(--bg); border-bottom: 1px solid var(--border); }
+.search-wrap { flex: 1; position: relative; }
+.search-wrap input {
+  width: 100%; background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; padding: 8px 12px 8px 34px; color: var(--text);
+  font-size: 13px; font-family: inherit; outline: none; box-shadow: var(--shadow);
+}
+.search-wrap input:focus { border-color: var(--accent); }
+.search-wrap input::placeholder { color: var(--text3); }
+.search-icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text3); font-size: 15px; }
+.btn { background: var(--surface); border: 1px solid var(--border); color: var(--text2); padding: 8px 11px; border-radius: 8px; font-size: 12px; cursor: pointer; font-family: inherit; white-space: nowrap; box-shadow: var(--shadow); }
+
+/* CHIPS */
+.filter-chips { padding: 8px 16px; display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; border-bottom: 1px solid var(--border); background: var(--bg); }
+.filter-chips::-webkit-scrollbar { display: none; }
+.chip { padding: 5px 13px; border-radius: 20px; font-size: 12px; cursor: pointer; white-space: nowrap; border: 1px solid var(--border); color: var(--text2); background: var(--surface); user-select: none; }
+.chip.active-chip { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+.chip.green-chip { border-color: var(--green); color: var(--green); }
+.chip.green-chip.active-chip { background: var(--green); color: #fff; }
+
+/* LIST */
+.list { padding: 12px 16px; display: flex; flex-direction: column; gap: 8px; padding-bottom: 90px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 13px 14px; cursor: pointer; border-left: 3px solid transparent; box-shadow: var(--shadow); }
+.card:active { opacity: 0.82; }
+.card.has-kpr { border-left-color: var(--amber); }
+.card.is-confirmed { border-left-color: var(--green); }
+
+.card-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+.card-num { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--text3); white-space: nowrap; margin-top: 2px; flex-shrink: 0; }
+.card-name { font-size: 13px; font-weight: 600; line-height: 1.35; flex: 1; }
+.badge { font-size: 10px; padding: 2px 8px; border-radius: 10px; font-weight: 600; white-space: nowrap; flex-shrink: 0; }
+.badge-green { background: #dcfce7; color: var(--green); }
+.badge-amber { background: #fef3c7; color: var(--amber); }
+.badge-gray { background: var(--surface2); color: var(--text3); }
+.badge-purple { background: #ede9fe; color: var(--purple); }
+
+.card-info { display: flex; flex-wrap: wrap; gap: 5px 12px; margin-top: 7px; }
+.card-info-item { font-size: 11px; color: var(--text2); }
+.card-info-item.green { color: var(--green); font-weight: 600; }
+.card-info-item.blue { color: var(--accent); font-weight: 600; }
+.card-kpr-row { margin-top: 6px; display: flex; gap: 8px; flex-wrap: wrap; }
+.kpr-tag { font-size: 11px; padding: 2px 9px; border-radius: 6px; font-weight: 600; }
+.kpr-tag.amber { background: #fef3c7; color: var(--amber); }
+.kpr-tag.green { background: #dcfce7; color: var(--green); }
+.kpr-tag.gray { background: var(--surface2); color: var(--text3); }
+
+/* FAB */
+.fab {
+  position: fixed; bottom: 28px; right: 20px;
+  width: 54px; height: 54px; border-radius: 50%;
+  background: #e74c3c; color: #fff; border: none;
+  font-size: 28px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 4px 20px rgba(231,76,60,0.4); z-index: 200;
+}
+
+/* MODAL */
+.overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 300; }
+.overlay.open { display: block; }
+.modal {
+  position: fixed; bottom: 0; left: 0; right: 0; background: #fff;
+  border-radius: 20px 20px 0 0; max-height: 92vh; overflow-y: auto;
+  z-index: 301; transform: translateY(100%); transition: transform 0.28s ease;
+}
+.modal.open { transform: translateY(0); }
+.modal-handle { width: 40px; height: 4px; background: var(--border); border-radius: 2px; margin: 12px auto 0; }
+.modal-header {
+  padding: 14px 16px 12px; display: flex; justify-content: space-between; align-items: center;
+  border-bottom: 1px solid var(--border); position: sticky; top: 0; background: #fff; z-index: 10;
+}
+.modal-title { font-family: 'IBM Plex Mono', monospace; font-size: 15px; font-weight: 600; }
+.btn-close { width: 32px; height: 32px; border-radius: 50%; background: var(--surface2); border: 1px solid var(--border); color: var(--text2); font-size: 20px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.modal-body { padding: 16px; }
+
+/* TYPE */
+.type-toggle { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 18px; }
+.type-btn { padding: 11px; border-radius: 10px; border: 1.5px solid var(--border); background: var(--surface2); color: var(--text2); font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; text-align: center; }
+.type-btn.active { border-color: var(--accent); color: var(--accent); background: #eff6ff; }
+
+/* FORM */
+.section-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--text3); margin: 18px 0 10px; display: flex; align-items: center; gap: 8px; }
+.section-label::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+.field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.field { margin-bottom: 10px; }
+.field label { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text3); margin-bottom: 5px; }
+.field input, .field textarea {
+  width: 100%; background: var(--surface2); border: 1.5px solid var(--border);
+  border-radius: 8px; padding: 10px 12px; color: var(--text); font-size: 13px;
+  font-family: inherit; outline: none; transition: border-color 0.15s;
+}
+.field input:focus, .field textarea:focus { border-color: var(--accent); background: #fff; }
+.field input::placeholder, .field textarea::placeholder { color: var(--text3); }
+.field textarea { resize: vertical; min-height: 72px; }
+.field input.required-empty { border-color: var(--red); }
+
+/* GREEN BOX */
+.green-box {
+  background: #f0fdf4; border: 1.5px solid #86efac;
+  border-radius: var(--radius); padding: 16px; margin-top: 8px;
+}
+.green-box-title { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--green); font-weight: 700; margin-bottom: 14px; }
+
+/* KPR field inside green box */
+.green-box .field input { background: #fff; border-color: #bbf7d0; }
+.green-box .field input:focus { border-color: var(--green); }
+.green-box .field label { color: var(--green); }
+
+/* STATUS PILLS */
+.status-pills { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 14px; }
+.status-pill {
+  padding: 11px 8px; border-radius: 10px; border: 1.5px solid var(--border);
+  background: var(--surface2); font-size: 13px; font-weight: 600;
+  cursor: pointer; font-family: inherit; text-align: center; color: var(--text2);
+  transition: all 0.15s;
+}
+.status-pill.confirmed.active { border-color: var(--green); color: #fff; background: var(--green); }
+.status-pill.waiting.active { border-color: var(--amber); color: #fff; background: var(--amber); }
+
+/* SAVE / DELETE */
+.btn-save { width: 100%; padding: 14px; background: var(--accent); color: #fff; border: none; border-radius: var(--radius); font-size: 15px; font-weight: 700; cursor: pointer; font-family: inherit; margin-top: 20px; margin-bottom: 8px; }
+.btn-delete { width: 100%; padding: 12px; background: none; color: var(--red); border: 1.5px solid #fecaca; border-radius: var(--radius); font-size: 13px; cursor: pointer; font-family: inherit; margin-bottom: 8px; }
+.footer { text-align: center; padding: 10px 0 20px; font-size: 11px; color: var(--text3); }
+
+/* KPR TAB */
+.kpr-wrap { padding: 14px 16px; padding-bottom: 90px; }
+.section-title { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--text3); margin: 16px 0 10px; font-weight: 600; }
+
+/* ANALYTICS */
+.analytics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+.a-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; text-align: center; box-shadow: var(--shadow); }
+.a-card .big { font-family: 'IBM Plex Mono', monospace; font-size: 28px; font-weight: 700; line-height: 1; margin-bottom: 4px; }
+.a-card .lbl { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.5px; }
+
+.bar-section { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; margin-bottom: 14px; box-shadow: var(--shadow); }
+.bar-section h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--text3); margin-bottom: 12px; }
+.bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.bar-lbl { font-size: 11px; color: var(--text2); width: 95px; flex-shrink: 0; text-align: right; }
+.bar-track { flex: 1; height: 8px; background: var(--surface2); border-radius: 4px; overflow: hidden; }
+.bar-fill { height: 100%; border-radius: 4px; }
+.bar-val { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--text2); width: 28px; }
+
+/* IZVJEŠTAJ inside KPR tab */
+.report-section { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; margin-bottom: 12px; box-shadow: var(--shadow); }
+.share-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+.btn-whatsapp { padding: 11px; background: #25d366; color: #fff; border: none; border-radius: 10px; font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit; }
+.btn-email { padding: 11px; background: var(--accent); color: #fff; border: none; border-radius: 10px; font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit; }
+.btn-copy-r { width: 100%; padding: 11px; background: var(--surface2); color: var(--text2); border: 1px solid var(--border); border-radius: 10px; font-size: 13px; cursor: pointer; font-family: inherit; margin-bottom: 14px; }
+
+.report-row { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--border); }
+.report-row:last-child { border-bottom: none; }
+.report-num { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--text3); width: 24px; flex-shrink: 0; }
+.report-name { flex: 1; font-size: 13px; font-weight: 500; line-height: 1.3; }
+.report-kpr { font-family: 'IBM Plex Mono', monospace; font-size: 12px; font-weight: 700; flex-shrink: 0; }
+.report-kpr.confirmed { color: var(--green); }
+.report-kpr.waiting { color: var(--amber); }
+
+/* BACKUP MODAL */
+.backup-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 500; display: none; align-items: center; justify-content: center; padding: 16px; }
+.backup-modal.open { display: flex; }
+.backup-box { background: #fff; border-radius: 16px; padding: 20px; width: 100%; max-width: 500px; box-shadow: 0 8px 40px rgba(0,0,0,0.2); }
+.backup-box h2 { font-size: 15px; margin-bottom: 14px; }
+.backup-box textarea { width: 100%; height: 160px; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-family: 'IBM Plex Mono', monospace; font-size: 11px; padding: 10px; resize: none; outline: none; }
+.backup-btns { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.btn-primary { flex: 1; min-width: 120px; padding: 11px; background: var(--accent); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; }
+.btn-download { flex: 1; min-width: 120px; padding: 11px; background: var(--green); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; }
+.btn-secondary { flex: 1; min-width: 100px; padding: 11px; background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 8px; font-size: 13px; cursor: pointer; font-family: inherit; }
+
+/* TOAST */
+.toast { position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--text); color: #fff; padding: 10px 18px; border-radius: 10px; font-size: 13px; z-index: 999; opacity: 0; transition: all 0.25s; pointer-events: none; white-space: nowrap; }
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* EMPTY */
+.empty { text-align: center; padding: 40px 20px; color: var(--text3); }
+.empty p { margin-top: 8px; font-size: 13px; }
+
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+</style>
+</head>
+<body>
+
+<!-- LOCK -->
+<div id="lockScreen">
+  <div class="lock-box">
+    <div class="lock-logo">🔐</div>
+    <h2>RS i RSK u Srbiji</h2>
+    <p>Unesite lozinku za pristup registru</p>
+    <input type="text" id="lockInput" placeholder="unesite lozinku"
+      autocomplete="off" autocorrect="off" spellcheck="false"
+      onkeydown="if(event.key==='Enter')unlock()">
+    <button class="lock-btn" onclick="unlock()">Uđi →</button>
+    <div class="lock-hint">Neda Krstić — registar organizacija dijaspore</div>
+  </div>
+</div>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="header-top">
+    <div class="header-title">
+      <h1>RS i RSK u Srbiji</h1>
+      <p>Registar organizacija i kontakata</p>
+    </div>
+    <button class="btn-lock" onclick="lockApp()">🔒 Odjava</button>
+  </div>
+  <div class="stats">
+    <div class="stat"><div class="stat-num" id="statUkupno">0</div><div class="stat-label">Ukupno</div></div>
+    <div class="stat"><div class="stat-num purple" id="statPrivatnih">0</div><div class="stat-label">Privatnih</div></div>
+    <div class="stat"><div class="stat-num amber" id="statKpr">0</div><div class="stat-label">KPR</div></div>
+    <div class="stat"><div class="stat-num green" id="statPotvr">0</div><div class="stat-label">Potvrđeno</div></div>
+  </div>
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab('sve')">📋 Sve</div>
+    <div class="tab" onclick="switchTab('kpr')">📞 KPR</div>
+  </div>
+</div>
+
+<!-- TOOLBAR (Sve tab only) -->
+<div class="toolbar" id="toolbar">
+  <div class="search-wrap">
+    <span class="search-icon">🔍</span>
+    <input type="text" id="searchInput" placeholder="Pretraži po imenu..." oninput="renderList()">
+  </div>
+  <button class="btn" onclick="openBackup()">💾 Backup</button>
+</div>
+
+<!-- CHIPS -->
+<div class="filter-chips" id="filterChips">
+  <div class="chip active-chip" onclick="setChip('sve',this)">Sve</div>
+  <div class="chip green-chip" onclick="setChip('potvrdjeno',this)">✅ Potvrđeni</div>
+  <div class="chip" onclick="setChip('cekanje',this)">⏳ Na čekanju</div>
+  <div class="chip" onclick="setChip('udruženje',this)">Udruženja</div>
+  <div class="chip" onclick="setChip('privatno',this)">Privatna lica</div>
+</div>
+
+<!-- TAB: SVE -->
+<div id="tab-sve" class="tab-content active">
+  <div class="list" id="listSve"></div>
+</div>
+
+<!-- TAB: KPR (analytics + report) -->
+<div id="tab-kpr" class="tab-content">
+  <div class="kpr-wrap">
+
+    <!-- ANALYTICS -->
+    <div class="analytics-grid" id="kprStats"></div>
+    <div class="bar-section" id="kprBars"></div>
+
+    <!-- KPR LIST -->
+    <div class="section-title">Kontaktirani</div>
+    <div id="kprList" style="display:flex;flex-direction:column;gap:8px;"></div>
+
+    <!-- IZVJEŠTAJ -->
+    <div class="section-title" style="margin-top:24px">Izvještaj — pošalji</div>
+    <div class="share-btns">
+      <button class="btn-whatsapp" onclick="shareWhatsApp()">💬 WhatsApp</button>
+      <button class="btn-email" onclick="shareEmail()">✉️ E-mail</button>
+    </div>
+    <button class="btn-copy-r" onclick="copyReport()">📋 Kopiraj tekst</button>
+    <div class="report-section">
+      <div class="section-title" style="margin-top:0">Pregled potvrđenih</div>
+      <div id="reportList"></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- FAB -->
+<button class="fab" onclick="openModal()">+</button>
+
+<!-- OVERLAY -->
+<div class="overlay" id="overlay" onclick="closeModal()"></div>
+
+<!-- ENTRY MODAL -->
+<div class="modal" id="modal">
+  <div class="modal-handle"></div>
+  <div class="modal-header">
+    <div class="modal-title" id="modalTitle">#novi</div>
+    <button class="btn-close" onclick="closeModal()">×</button>
+  </div>
+  <div class="modal-body">
+
+    <div class="type-toggle">
+      <button class="type-btn active" id="typeBtnUdr" onclick="setType('udruženje')">🏛 Udruženje</button>
+      <button class="type-btn" id="typeBtnPriv" onclick="setType('privatno')">👤 Privatno lice</button>
+    </div>
+
+    <div class="section-label">① Naziv / Ime</div>
+    <div class="field">
+      <label>Puno zvanično ime *</label>
+      <input type="text" id="fNaziv" placeholder="Naziv organizacije ili ime i prezime">
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Matični broj (MB)</label><input type="text" id="fMb" placeholder="MB"></div>
+      <div class="field"><label>PIB</label><input type="text" id="fPib" placeholder="PIB"></div>
+    </div>
+    <div class="field"><label>Adresa sjedišta</label><input type="text" id="fAdresa" placeholder="Ulica, grad"></div>
+
+    <div class="section-label">② Kontakt</div>
+    <div class="field-row">
+      <div class="field"><label>Predsjednik / Direktor</label><input type="text" id="fPredsjednik" placeholder="Ime i prezime"></div>
+      <div class="field"><label>Telefon / E-mail</label><input type="text" id="fKontakt" placeholder="tel. / mail"></div>
+    </div>
+
+    <!-- GREEN BOX -->
+    <div class="green-box">
+      <div class="green-box-title">③ KPR</div>
+
+      <div class="field-row">
+        <div class="field"><label>KPR broj</label><input type="number" id="fPotvrdjenKpr" placeholder="broj"></div>
+        <div class="field"><label>Datum kontakta</label><input type="date" id="fDatumKpr"></div>
+      </div>
+
+      <div class="field" style="margin-bottom:14px">
+        <label>Status</label>
+        <div class="status-pills">
+          <button class="status-pill confirmed" id="pillPotvr" onclick="setStatus('potvrdjeno')">✅ Potvrđeno</button>
+          <button class="status-pill waiting" id="pillCeka" onclick="setStatus('cekanje')">⏳ Na čekanju</button>
+        </div>
+      </div>
+
+      <div class="field"><label>Napomena</label><textarea id="fNapomena" placeholder="Veze, finansijeri, dodatne informacije..."></textarea></div>
+    </div>
+
+    <button class="btn-save" onclick="saveEntry()">Sačuvaj</button>
+    <button class="btn-delete" id="btnDelete" style="display:none" onclick="deleteEntry()">🗑 Obriši ovaj unos</button>
+    <div class="footer">Neda Krstić — registar organizacija dijaspore</div>
+  </div>
+</div>
+
+<!-- BACKUP MODAL -->
+<div class="backup-modal" id="backupModal">
+  <div class="backup-box">
+    <h2>💾 Backup podataka</h2>
+    <textarea id="backupText" readonly></textarea>
+    <div class="backup-btns">
+      <button class="btn-download" onclick="downloadBackup()">⬇ Skini na telefon</button>
+      <button class="btn-primary" onclick="copyBackup()">📋 Kopiraj</button>
+    </div>
+    <div class="backup-btns" style="margin-top:8px">
+      <button class="btn-secondary" onclick="showImport()">↑ Učitaj backup</button>
+      <button class="btn-secondary" onclick="closeBackup()">Zatvori</button>
+    </div>
+    <div id="importArea" style="display:none;margin-top:12px">
+      <textarea id="importText" style="width:100%;height:120px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px;font-family:'IBM Plex Mono',monospace;font-size:11px;outline:none;" placeholder="Zalijepi JSON backup ovdje..."></textarea>
+      <button class="btn-primary" style="width:100%;margin-top:8px" onclick="doImport()">Učitaj podatke</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const ADMIN_PWD = 'krajina2026';
+const STORAGE_KEY = 'nvo_registar_v5';
+
+let db = [];
+let editingId = null;
+let currentTab = 'sve';
+let currentChip = 'sve';
+let currentStatus = '';
+
+// ── LOCK ──
+function unlock() {
+  const val = document.getElementById('lockInput').value;
+  if (val === ADMIN_PWD) {
+    document.getElementById('lockScreen').style.display = 'none';
+    load();
+  } else {
+    const inp = document.getElementById('lockInput');
+    inp.classList.add('error'); inp.value = '';
+    inp.placeholder = 'Pogrešna lozinka — pokušaj ponovo';
+    setTimeout(() => { inp.classList.remove('error'); inp.placeholder = 'unesite lozinku'; }, 2000);
+  }
+}
+function lockApp() {
+  document.getElementById('lockInput').value = '';
+  document.getElementById('lockScreen').style.display = 'flex';
+}
+
+// ── STORAGE ──
+function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(db)); }
+function load() {
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if (raw) { try { db = JSON.parse(raw); } catch(e) { db = []; } }
+  renderAll();
+}
+
+// ── TABS ──
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', ['sve','kpr'][i] === tab));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  document.getElementById('tab-' + tab).classList.add('active');
+
+  document.getElementById('toolbar').style.display = tab === 'sve' ? 'flex' : 'none';
+  document.getElementById('filterChips').style.display = tab === 'sve' ? 'flex' : 'none';
+
+  if (tab === 'kpr') renderKpr();
+  if (tab === 'sve') renderList();
+}
+
+// ── CHIPS ──
+function setChip(val, el) {
+  currentChip = val;
+  document.querySelectorAll('.chip').forEach(c => c.classList.remove('active-chip'));
+  el.classList.add('active-chip');
+  renderList();
+}
+
+// ── RENDER ──
+function renderAll() { updateStats(); renderList(); }
+
+function updateStats() {
+  document.getElementById('statUkupno').textContent = db.length;
+  document.getElementById('statPrivatnih').textContent = db.filter(e => e.tip === 'privatno').length;
+  document.getElementById('statKpr').textContent = db.filter(e => e.kprBroj || e.datumKpr).length;
+  document.getElementById('statPotvr').textContent = db.filter(e => e.status === 'potvrdjeno').length;
+}
+
+function getFiltered() {
+  const q = (document.getElementById('searchInput').value || '').toLowerCase();
+  let list = [...db];
+  if (q) list = list.filter(e =>
+    e.naziv.toLowerCase().includes(q) ||
+    (e.predsjednik||'').toLowerCase().includes(q) ||
+    (e.mb||'').includes(q)
+  );
+  if (currentChip === 'potvrdjeno') return list.filter(e => e.status === 'potvrdjeno');
+  if (currentChip === 'cekanje') return list.filter(e => e.status === 'cekanje');
+  if (currentChip === 'udruženje') return list.filter(e => e.tip !== 'privatno');
+  if (currentChip === 'privatno') return list.filter(e => e.tip === 'privatno');
+  return list;
+}
+
+function renderList() {
+  updateStats();
+  if (currentTab !== 'sve') return;
+
+  // chip counts
+  const chips = document.querySelectorAll('.chip');
+  if (chips[0]) chips[0].textContent = `Sve ${db.length}`;
+  if (chips[1]) chips[1].textContent = `✅ Potvrđeni ${db.filter(e=>e.status==='potvrdjeno').length}`;
+  if (chips[2]) chips[2].textContent = `⏳ Na čekanju ${db.filter(e=>e.status==='cekanje').length}`;
+
+  const container = document.getElementById('listSve');
+  const list = getFiltered();
+
+  if (list.length === 0) {
+    container.innerHTML = `<div class="empty"><div style="font-size:36px">📭</div><p>Nema rezultata</p></div>`;
+    return;
+  }
+
+  container.innerHTML = list.map(e => {
+    const idx = db.indexOf(e);
+    const hasKpr = e.kprBroj || e.datumKpr;
+    const isConf = e.status === 'potvrdjeno';
+    const isCeka = e.status === 'cekanje';
+
+    let borderClass = isConf ? 'is-confirmed' : isCeka ? 'has-kpr' : '';
+
+    const tipBadge = e.tip === 'privatno' ? `<span class="badge badge-purple">👤</span>` : '';
+    const statusBadge = isConf
+      ? `<span class="badge badge-green">✅ Potvrđeno</span>`
+      : isCeka
+        ? `<span class="badge badge-amber">⏳ Čekanje</span>`
+        : `<span class="badge badge-gray">—</span>`;
+
+    const infos = [];
+    if (e.mb) infos.push(`<span class="card-info-item green">🏛 MB: ${e.mb}</span>`);
+    if (e.pib) infos.push(`<span class="card-info-item blue">PIB: ${e.pib}</span>`);
+    if (e.adresa) infos.push(`<span class="card-info-item">📍 ${e.adresa}</span>`);
+    if (e.predsjednik) infos.push(`<span class="card-info-item">👤 ${e.predsjednik}</span>`);
+    if (e.kontakt) infos.push(`<span class="card-info-item blue">📞 ${e.kontakt}</span>`);
+    const infoRow = infos.length ? `<div class="card-info">${infos.join('')}</div>` : '';
+
+    let kprRow = '';
+    if (hasKpr) {
+      let tags = '';
+      if (e.datumKpr) tags += `<span class="kpr-tag amber">📅 ${e.datumKpr}</span>`;
+      if (e.kprBroj) tags += `<span class="kpr-tag ${isConf?'green':'amber'}">KPR: ${e.kprBroj}</span>`;
+      kprRow = `<div class="card-kpr-row">${tags}</div>`;
+    }
+
+    return `
+    <div class="card ${borderClass}" onclick="openEdit(${idx})">
+      <div class="card-header">
+        <span class="card-num">#${idx+1}</span>
+        <div class="card-name">${e.naziv}</div>
+        <div style="display:flex;gap:4px;align-items:center;flex-shrink:0">${tipBadge}${statusBadge}</div>
+      </div>
+      ${infoRow}
+      ${kprRow}
+    </div>`;
+  }).join('');
+}
+
+// ── KPR TAB ──
+function renderKpr() {
+  const total = db.length;
+  const kpr = db.filter(e => e.kprBroj || e.datumKpr).length;
+  const potvr = db.filter(e => e.status === 'potvrdjeno').length;
+  const cekanje = db.filter(e => e.status === 'cekanje').length;
+  const sumKpr = db.reduce((a,e) => a+(parseInt(e.kprBroj)||0), 0);
+  const pct = (n,d) => d>0 ? Math.round(n/d*100) : 0;
+
+  document.getElementById('kprStats').innerHTML = `
+    <div class="a-card"><div class="big" style="color:var(--accent)">${total}</div><div class="lbl">Ukupno</div></div>
+    <div class="a-card"><div class="big" style="color:var(--amber)">${kpr}</div><div class="lbl">Kontaktirani</div></div>
+    <div class="a-card"><div class="big" style="color:var(--green)">${potvr}</div><div class="lbl">Potvrđeni</div></div>
+    <div class="a-card"><div class="big" style="color:var(--amber)">${cekanje}</div><div class="lbl">Na čekanju</div></div>
+  `;
+
+  document.getElementById('kprBars').innerHTML = `
+    <h3>KPR pregled</h3>
+    ${bar('Kontaktirani', kpr, total, 'var(--amber)')}
+    ${bar('Potvrđeni', potvr, total, 'var(--green)')}
+    ${bar('Na čekanju', cekanje, total, 'var(--amber)')}
+    <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+      <span style="font-size:12px;color:var(--text2)">Ukupan KPR broj</span>
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:16px;font-weight:700;color:var(--green)">${sumKpr.toLocaleString()}</span>
+    </div>
+    <div style="margin-top:4px;display:flex;justify-content:space-between;align-items:center">
+      <span style="font-size:12px;color:var(--text2)">Stopa potvrđenih</span>
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:16px;font-weight:700;color:var(--accent)">${pct(potvr,total)}%</span>
+    </div>
+  `;
+
+  // KPR list
+  const kprItems = db.filter(e => e.kprBroj || e.datumKpr);
+  const kprListEl = document.getElementById('kprList');
+  if (kprItems.length === 0) {
+    kprListEl.innerHTML = `<div class="empty" style="padding:20px 0"><p>Nema kontaktiranih</p></div>`;
+  } else {
+    kprListEl.innerHTML = kprItems.map(e => {
+      const idx = db.indexOf(e);
+      const isConf = e.status === 'potvrdjeno';
+      const isCeka = e.status === 'cekanje';
+      return `
+      <div class="card ${isConf?'is-confirmed':isCeka?'has-kpr':''}" onclick="openEdit(${idx})">
+        <div class="card-header">
+          <span class="card-num">#${idx+1}</span>
+          <div class="card-name">${e.naziv}</div>
+          ${isConf?`<span class="badge badge-green">✅</span>`:isCeka?`<span class="badge badge-amber">⏳</span>`:`<span class="badge badge-gray">—</span>`}
+        </div>
+        <div class="card-kpr-row">
+          ${e.datumKpr?`<span class="kpr-tag amber">📅 ${e.datumKpr}</span>`:''}
+          ${e.kprBroj?`<span class="kpr-tag ${isConf?'green':'amber'}">KPR: ${e.kprBroj}</span>`:''}
+        </div>
+        ${e.napomena?`<div style="font-size:11px;color:var(--text2);margin-top:5px;line-height:1.4">${e.napomena.substring(0,80)}${e.napomena.length>80?'…':''}</div>`:''}
+      </div>`;
+    }).join('');
+  }
+
+  // Report list
+  renderReport();
+}
+
+function renderReport() {
+  const confirmed = db.filter(e => e.status === 'potvrdjeno' || e.status === 'cekanje');
+  const listEl = document.getElementById('reportList');
+  if (confirmed.length === 0) {
+    listEl.innerHTML = `<div class="empty" style="padding:20px 0"><p>Nema KPR unosa</p></div>`;
+    return;
+  }
+  listEl.innerHTML = confirmed.map((e, i) => {
+    const isConf = e.status === 'potvrdjeno';
+    return `
+    <div class="report-row">
+      <div class="report-num">${i+1}.</div>
+      <div class="report-name">${e.naziv}${e.predsjednik?`<br><span style="font-size:11px;color:var(--text3)">👤 ${e.predsjednik}</span>`:''}</div>
+      <div class="report-kpr ${isConf?'confirmed':'waiting'}">${e.kprBroj||'—'}${isConf?' ✅':' ⏳'}</div>
+    </div>`;
+  }).join('');
+}
+
+function bar(lbl, val, max, color) {
+  const pct = max > 0 ? Math.min(100, Math.round(val/max*100)) : 0;
+  return `<div class="bar-row"><div class="bar-lbl">${lbl}</div><div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${color}"></div></div><div class="bar-val">${val}</div></div>`;
+}
+
+// ── REPORT TEXT ──
+function buildReportText() {
+  const items = db.filter(e => e.status === 'potvrdjeno' || e.status === 'cekanje');
+  const potvr = items.filter(e=>e.status==='potvrdjeno');
+  const ceka = items.filter(e=>e.status==='cekanje');
+  const sumKpr = items.reduce((a,e)=>a+(parseInt(e.kprBroj)||0),0);
+  const date = new Date().toLocaleDateString('sr-Latn-BA');
+
+  let txt = `RS i RSK u Srbiji — KPR Izvještaj\n`;
+  txt += `Datum: ${date}\n`;
+  txt += `Potvrđenih: ${potvr.length} | Na čekanju: ${ceka.length}\n`;
+  txt += `Ukupan KPR broj: ${sumKpr}\n`;
+  txt += `${'─'.repeat(32)}\n\n`;
+
+  potvr.forEach((e,i) => {
+    txt += `${i+1}. ✅ ${e.naziv}\n`;
+    if (e.predsjednik) txt += `   ${e.predsjednik}${e.kontakt?' / '+e.kontakt:''}\n`;
+    if (e.kprBroj) txt += `   KPR: ${e.kprBroj}\n`;
+    txt += '\n';
+  });
+
+  if (ceka.length) {
+    txt += `Na čekanju:\n`;
+    ceka.forEach((e,i) => {
+      txt += `${i+1}. ⏳ ${e.naziv}${e.kprBroj?' — KPR: '+e.kprBroj:''}\n`;
+    });
+  }
+
+  txt += `\n─────────────────────────────────\n`;
+  txt += `Neda Krstić — registar organizacija dijaspore`;
+  return txt;
+}
+
+function shareWhatsApp() {
+  window.open(`https://wa.me/?text=${encodeURIComponent(buildReportText())}`, '_blank');
+}
+function shareEmail() {
+  window.open(`mailto:?subject=${encodeURIComponent('RS i RSK — KPR Izvještaj')}&body=${encodeURIComponent(buildReportText())}`, '_blank');
+}
+function copyReport() {
+  navigator.clipboard.writeText(buildReportText())
+    .then(() => showToast('Izvještaj kopiran ✓'))
+    .catch(() => showToast('Nije kopirano'));
+}
+
+// ── MODAL ──
+function openModal(id) {
+  editingId = id !== undefined ? id : null;
+  const e = editingId !== null ? db[editingId] : null;
+
+  document.getElementById('modalTitle').textContent = e ? `#${editingId+1} — uredi` : '#novi';
+  document.getElementById('btnDelete').style.display = e ? 'block' : 'none';
+
+  setType(e ? e.tip : 'udruženje');
+  document.getElementById('fNaziv').value = e?.naziv || '';
+  document.getElementById('fMb').value = e?.mb || '';
+  document.getElementById('fPib').value = e?.pib || '';
+  document.getElementById('fAdresa').value = e?.adresa || '';
+  document.getElementById('fPredsjednik').value = e?.predsjednik || '';
+  document.getElementById('fKontakt').value = e?.kontakt || '';
+  document.getElementById('fPotvrdjenKpr').value = e?.kprBroj || '';
+  document.getElementById('fDatumKpr').value = e?.datumKpr || '';
+  document.getElementById('fNapomena').value = e?.napomena || '';
+  setStatus(e?.status || '');
+
+  document.getElementById('overlay').classList.add('open');
+  document.getElementById('modal').classList.add('open');
+}
+
+function openEdit(idx) { openModal(idx); }
+
+function closeModal() {
+  document.getElementById('overlay').classList.remove('open');
+  document.getElementById('modal').classList.remove('open');
+}
+
+function setType(val) {
+  document.getElementById('typeBtnUdr').classList.toggle('active', val !== 'privatno');
+  document.getElementById('typeBtnPriv').classList.toggle('active', val === 'privatno');
+}
+
+function setStatus(val) {
+  currentStatus = val;
+  document.getElementById('pillPotvr').classList.toggle('active', val === 'potvrdjeno');
+  document.getElementById('pillCeka').classList.toggle('active', val === 'cekanje');
+}
+
+function saveEntry() {
+  const naziv = document.getElementById('fNaziv').value.trim();
+  if (!naziv) {
+    document.getElementById('fNaziv').classList.add('required-empty');
+    setTimeout(() => document.getElementById('fNaziv').classList.remove('required-empty'), 1500);
+    return;
+  }
+
+  const entry = {
+    tip: document.getElementById('typeBtnPriv').classList.contains('active') ? 'privatno' : 'udruženje',
+    naziv,
+    mb: document.getElementById('fMb').value.trim(),
+    pib: document.getElementById('fPib').value.trim(),
+    adresa: document.getElementById('fAdresa').value.trim(),
+    predsjednik: document.getElementById('fPredsjednik').value.trim(),
+    kontakt: document.getElementById('fKontakt').value.trim(),
+    kprBroj: document.getElementById('fPotvrdjenKpr').value.trim(),
+    datumKpr: document.getElementById('fDatumKpr').value,
+    status: currentStatus,
+    napomena: document.getElementById('fNapomena').value.trim(),
+    azurirano: new Date().toISOString().split('T')[0]
+  };
+
+  if (editingId !== null) { db[editingId] = entry; showToast('Sačuvano ✓'); }
+  else { db.push(entry); showToast('Dodano ✓'); }
+
+  save(); closeModal(); renderAll();
+}
+
+function deleteEntry() {
+  if (editingId === null) return;
+  if (!confirm('Obrisati ovaj unos?')) return;
+  db.splice(editingId, 1);
+  save(); closeModal(); renderAll();
+  showToast('Obrisano');
+}
+
+// ── BACKUP ──
+function openBackup() {
+  const json = JSON.stringify(db, null, 2);
+  document.getElementById('backupText').value = json;
+  document.getElementById('importArea').style.display = 'none';
+  document.getElementById('backupModal').classList.add('open');
+}
+
+function closeBackup() {
+  document.getElementById('backupModal').classList.remove('open');
+}
+
+function downloadBackup() {
+  const json = JSON.stringify(db, null, 2);
+  const date = new Date().toISOString().split('T')[0];
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `nvo_registar_${date}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast('Fajl skinuti ✓');
+}
+
+function copyBackup() {
+  const json = document.getElementById('backupText').value;
+  navigator.clipboard.writeText(json)
+    .then(() => showToast('Kopirano ✓'))
+    .catch(() => showToast('Kopiraj ručno iz polja'));
+}
+
+function showImport() {
+  document.getElementById('importArea').style.display = 'block';
+  document.getElementById('importText').focus();
+}
+
+function doImport() {
+  try {
+    const parsed = JSON.parse(document.getElementById('importText').value);
+    if (!Array.isArray(parsed)) throw new Error();
+    db = parsed; save(); renderAll(); closeBackup();
+    showToast(`Učitano ${db.length} unosa ✓`);
+  } catch { showToast('Greška — provjeri JSON format'); }
+}
+
+// ── TOAST ──
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+window.onload = () => {};
+</script>
+</body>
+</html>
